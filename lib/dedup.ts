@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
 
 /**
  * تولید hash پایدار (SHA-256) از یک رشته.
@@ -25,12 +25,13 @@ export async function isDuplicate(sourceUrl: string): Promise<boolean> {
   if (memoryCache.has(hash)) return true;
 
   // 2) اگر Supabase تنظیم نشده، فقط بر اساس cache تصمیم می‌گیریم
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured) {
     return false;
   }
 
   try {
-    const { data, error } = await supabase
+    const db = getSupabaseClient();
+    const { data, error } = await db
       .from("news_articles")
       .select("id")
       .eq("source_hash", hash)
@@ -59,10 +60,11 @@ export async function isDuplicate(sourceUrl: string): Promise<boolean> {
  * در ابتدای هر اجرای پایپ‌لاین فراخوانی می‌شود تا تعداد query ها کم شود.
  */
 export async function preloadExistingHashes(): Promise<number> {
-  if (!isSupabaseConfigured || !supabase) return 0;
+  if (!isSupabaseConfigured) return 0;
 
   try {
-    const { data, error } = await supabase
+    const db = getSupabaseClient();
+    const { data, error } = await db
       .from("news_articles")
       .select("source_hash");
 
