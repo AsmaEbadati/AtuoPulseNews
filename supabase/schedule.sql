@@ -1,34 +1,44 @@
 -- ============================================================
--- زمان‌بندی روزانهٔ پایپ‌لاین با pg_cron → Edge Function
+-- زمان‌بندی پایپ‌لاین با pg_cron → Edge Functions
 -- اجرا در: Supabase Dashboard > SQL Editor
 -- ============================================================
 -- پیش‌نیاز: Edge Function های run-pipeline و process-news دیپلوی شده باشند.
 --
--- نحوهٔ کار:
---   هر روز ساعت ۰۶:۳۰ UTC (= ۱۰:۰۰ تهران، UTC+03:30) یک POST به
---   run-pipeline زده می‌شود. آن تابع اخبار جدید را ذخیره کرده و برای هر
---   خبر یک درخواست (بدون انتظار) به process-news می‌فرستد.
+-- دو cron داریم:
+--   A) daily-news-pipeline   — هر روز ۱۰:۰۰ تهران → run-pipeline
+--                              (باما را می‌خواند، خبر جدید را ذخیره و صف می‌سازد)
+--   B) news-processor        — هر ۱۰ دقیقه → process-news برای «قدیمی‌ترین خبر new»
+--                              (چون run-pipeline به‌صورت fire-and-forget خبر‌ها را
+--                               پردازش می‌کند و ممکن است پروسه پس‌زمینه قطع شود؛
+--                               این cron پایشی مطمئن می‌شود هیچ خبری روی new نماند.
+--                               process-news خودش idempotent است و خبر success‌شده
+--                               را دوباره پردازش/منتشر نمی‌کند.)
 --
--- نکتهٔ امنیتی: PIPELINE_SECRET_KEY باید همان مقداری باشد که به‌عنوان
--- env تابع تنظیم شده و در هدر x-pipeline-secret فرستاده می‌شود.
+-- نکتهٔ امنیتی: PIPELINE_SECRET_KEY باید همان مقداری باشد که در env تابع
+-- تنظیم شده و در هدر x-pipeline-secret فرستاده می‌شود.
 -- ============================================================
 
--- ---------- 1) ذخیرهٔ secrets در Vault (یک‌بار) ----------
--- PROJECT_REF را با ref پروژه‌ات جایگزین کن.
+-- ---------- 1) ذخیرهٔ secrets در Vault (idempotent، یک‌بار) ----------
+-- pipeline_url: آدرس تابع سبک run-pipeline
 select vault.create_secret(
   'https://jcycygforwzryomjeyki.supabase.co/functions/v1/run-pipeline',
   'pipeline_url'
-);
+) on conflict (name) do nothing;
 
--- این مقدار را عوض کن: همان PIPELINE_SECRET_KEY در .env خودت.
--- (فعلاً همان کلید تولیدشدهٔ .env)
+-- process_url: آدرس تابع سنگین process-news (برای cron پایشی)
+select vault.create_secret(
+  'https://jcycygforwzryomjeyki.supabase.co/functions/v1/process-news',
+  'process_url'
+) on conflict (name) do nothing;
+
+-- pipeline_secret: همان PIPELINE_SECRET_KEY در .env
 select vault.create_secret(
   'cf12eae2d576f40ef09812d66f8df1289134fbf0650a185e274c7befd2353942',
   'pipeline_secret'
-);
+) on conflict (name) do nothing;
 
--- ---------- 2) schedule روزانه ----------
--- 30 6 * * *  = هر روز ساعت 06:30 UTC = 10:00 تهران
+-- ---------- 2) cron A: روزانه → run-pipeline ----------
+-- '30 6 * * *' = هر روز 06:30 UTC = 10:00 تهران (UTC+03:30)
 select cron.schedule(
   'daily-news-pipeline',
   '30 6 * * *',
@@ -45,10 +55,32 @@ select cron.schedule(
   $$
 );
 
--- ---------- 3) پایش / حذف ----------
+-- ---------- 3) cron B: پایشی هر ۱۰ دقیقه → process-news ----------
+-- قدیمی‌ترین خبرِ آماده‌ پردازش (new/processing) را برمی‌دارد و پردازش می‌کند.
+-- چون process-news بدون body قدیمی‌ترین new را انتخاب می‌کند، فقط یک بار
+-- در هر ۱۰ دقیقه یک خبر پردازش می‌شود (محدودیت نرخ NIM را هم رعایت می‌کند).
+select cron.schedule(
+  'news-processor',
+  '*/10 * * * *',
+  $$
+  select net.http_post(
+    url     := (select decrypted_secret from vault.decrypted_secrets where name = 'process_url'),
+    headers := jsonb_build_object(
+                 'Content-Type', 'application/json',
+                 'x-pipeline-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'pipeline_secret')
+               ),
+    body    := jsonb_build_object('trigger', 'cron'),
+    timeout_milliseconds := 140000
+  );
+  $$
+);
+
+-- ---------- 4) پایش / حذف ----------
 -- مشاهدهٔ همهٔ job ها:
 --   select * from cron.job;
 -- تاریخچهٔ اجرا:
---   select * from cron.job_run_details order by start_time desc limit 10;
--- حذف job:
+--   select * from cron.job_run_details order by start_time desc limit 20;
+-- حذف:
 --   select cron.unschedule('daily-news-pipeline');
+--   select cron.unschedule('news-processor');
+
