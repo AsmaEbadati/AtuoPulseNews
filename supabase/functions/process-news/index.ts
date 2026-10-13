@@ -112,7 +112,8 @@ Deno.serve(async (req) => {
     result.rewritten_len = content.rewritten_text.length;
 
     // 4) انتشار سایت (idempotent)
-    const sitePublicUrl = `https://autopulse-news.netlify.app/news/${item.slug}`;
+    const SITE_URL = (Deno.env.get("NEXT_PUBLIC_SITE_URL") || "https://autopulsenews.netlify.app").replace(/\/+$/, "");
+    const sitePublicUrl = `${SITE_URL}/news/${item.slug}`;
     let siteStatus = "skipped";
     try {
       const { data: claimed } = await db.rpc("claim_publication", {

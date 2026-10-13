@@ -110,7 +110,8 @@ run-pipeline ── ذخیرهٔ خبر جدید ──► process-news (per خ�
 
 - **idempotency:** هر خبر با `claim_publication` جلوی انتشار تکراری گرفته می‌شود.
   اگر یک خبر وسط راه قطع شود، اجرای بعدی فقط مقصدهای ناموفق را ادامه می‌دهد.
-- **SITE URL:** توی `process-news` لینک سایت فعلاً `https://autopulse-news.netlify.app/news/{slug}`
-  هاردکد شده — بعد از دیپلوی Netlify، آن دامنهٔ واقعی را جایگزین کن.
+- **SITE URL:** توی `process-news` لینک سایت از env `NEXT_PUBLIC_SITE_URL` خوانده می‌شود
+  (fallback: `https://autopulsenews.netlify.app`). هنگام ست‌کردن secrets، آن را
+  به دامنهٔ واقعی Netlify خودت تنظیم کن.
 - **Instagram:** فعلاً در این معماری حذف شده (نیاز به Make/Webhook دارد). کپشن در
   `ig_caption` ذخیره می‌شود و هر وقت خواستی اضافه می‌کنیم.
