@@ -1,0 +1,13 @@
+# Supabase Edge Functions config
+# project_id را با پروژهٔ خودت جایگزین کن (یا با `supabase link` ست می‌شود).
+project_id = "jcycygforwzryomjeyki"
+
+[functions.run-pipeline]
+  # احراز هویت با header سفارشی x-pipeline-secret انجام می‌شود (نه JWT Supabase).
+  verify_jwt = false
+
+[functions.process-news]
+  # این تابع به‌صورت داخلی توسط run-pipeline صدا زده می‌شود (service_role).
+  # برای اینکه curl/داشبورد هم قابل تست باشد، JWT را هم غیرفعال می‌کنیم و
+  # اعتبارسنجی x-pipeline-secret را داخل خود تابع انجام می‌دهیم.
+  verify_jwt = false

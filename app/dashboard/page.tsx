@@ -1,53 +1,78 @@
 import type { Metadata } from "next";
+import { getPublicClient } from "@/lib/supabase-public";
 
 export const metadata: Metadata = {
   title: "داشبورد — وضعیت پایپ‌لاین",
   description: "لاگ اجراهای پایپ‌لاین AutoPulse AI و وضعیت انتشار اخبار",
 };
 
-// --- Mock pipeline run data (فاز اول) ---
-const mockRuns = [
-  {
-    id: "run-1",
-    started_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    finished_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 45000).toISOString(),
-    status: "success",
-    articles_found: 10,
-    articles_new: 3,
-    articles_published: 3,
-    error_message: null,
-  },
-  {
-    id: "run-2",
-    started_at: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
-    finished_at: new Date(Date.now() - 26 * 60 * 60 * 1000 + 62000).toISOString(),
-    status: "partial",
-    articles_found: 10,
-    articles_new: 2,
-    articles_published: 1,
-    error_message: "خطا در ارسال به اینستاگرام: Rate limit",
-  },
-  {
-    id: "run-3",
-    started_at: new Date(Date.now() - 50 * 60 * 60 * 1000).toISOString(),
-    finished_at: new Date(Date.now() - 50 * 60 * 60 * 1000 + 38000).toISOString(),
-    status: "success",
-    articles_found: 10,
-    articles_new: 4,
-    articles_published: 4,
-    error_message: null,
-  },
-];
+interface RunRow {
+  started_at: string;
+  finished_at: string | null;
+  trigger: string;
+  found_count: number;
+  new_count: number;
+  success_count: number;
+  error_count: number;
+  note: string | null;
+}
 
-const mockStats = {
-  totalArticles: 9,
-  totalPublished: 8,
-  telegram: 7,
-  instagram: 5,
-  website: 9,
-  lastRun: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-  nextRun: "فردا ساعت ۰۸:۰۰",
-};
+interface StatusRow {
+  slug: string;
+  title: string;
+  process_status: string;
+  created_at: string;
+  destination: string;
+  status: string;
+  post_url: string | null;
+  error_message: string | null;
+  attempts: number;
+  updated_at: string;
+}
+
+async function getRuns(): Promise<RunRow[]> {
+  const db = getPublicClient();
+  if (!db) return [];
+  const { data, error } = await db
+    .from("public_runs")
+    .select(
+      "started_at, finished_at, trigger, found_count, new_count, success_count, error_count, note"
+    )
+    .order("started_at", { ascending: false })
+    .limit(30);
+  if (error) {
+    console.error("[dashboard] public_runs fetch failed:", error.message);
+    return [];
+  }
+  return (data as RunRow[]) ?? [];
+}
+
+async function getStatuses(): Promise<StatusRow[]> {
+  const db = getPublicClient();
+  if (!db) return [];
+  const { data, error } = await db
+    .from("public_status")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) {
+    console.error("[dashboard] public_status fetch failed:", error.message);
+    return [];
+  }
+  return (data as StatusRow[]) ?? [];
+}
+
+function computeStats(statuses: StatusRow[]) {
+  const success = (d: string) =>
+    statuses.filter((s) => s.destination === d && s.status === "success").length;
+  const uniqueArticles = new Set(statuses.map((s) => s.slug)).size;
+  return {
+    totalArticles: uniqueArticles,
+    website: success("site"),
+    telegram: success("telegram"),
+    instagram: success("instagram"),
+  };
+}
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("fa-IR", {
@@ -58,23 +83,32 @@ function formatDate(dateString: string) {
   });
 }
 
-function getDuration(start: string, end: string) {
+function getDuration(start: string, end: string | null) {
+  if (!end) return "—";
   const ms = new Date(end).getTime() - new Date(start).getTime();
   return `${(ms / 1000).toFixed(0)}ث`;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    success: { label: "✓ موفق", cls: "badge--success" },
-    partial: { label: "⚠ ناقص", cls: "badge--warning" },
-    failed:  { label: "✗ خطا", cls: "badge--error" },
-    running: { label: "⏳ در حال اجرا", cls: "badge--pending" },
-  };
-  const s = map[status] ?? map.running;
-  return <span className={`badge ${s.cls}`}>{s.label}</span>;
-}
+const DEST_LABEL: Record<string, string> = {
+  site: "🌐 سایت",
+  telegram: "✈️ تلگرام",
+  instagram: "📸 اینستاگرام",
+};
 
-export default function DashboardPage() {
+const PROC_LABEL: Record<string, string> = {
+  new: "🆕 جدید",
+  processing: "⏳ در حال پردازش",
+  ready: "✅ آماده انتشار",
+  error: "❌ خطا",
+};
+export default async function DashboardPage() {
+  const [runs, statuses] = await Promise.all([getRuns(), getStatuses()]);
+  const stats = computeStats(statuses);
+
+  const lastRun = runs[0] ?? null;
+  const lastRunNote = lastRun?.note;
+  const hasError = lastRun ? (lastRun.error_count ?? 0) > 0 : false;
+
   return (
     <div className="section">
       <div className="container">
@@ -105,10 +139,10 @@ export default function DashboardPage() {
           }}
         >
           {[
-            { icon: "📰", label: "کل اخبار", value: mockStats.totalArticles, color: "var(--color-primary)" },
-            { icon: "🌐", label: "سایت", value: mockStats.website, color: "var(--color-success)" },
-            { icon: "✈️", label: "تلگرام", value: mockStats.telegram, color: "var(--color-accent)" },
-            { icon: "📸", label: "اینستاگرام", value: mockStats.instagram, color: "#E1306C" },
+            { icon: "📰", label: "کل اخبار", value: stats.totalArticles, color: "var(--color-primary)" },
+            { icon: "🌐", label: "سایت", value: stats.website, color: "var(--color-success)" },
+            { icon: "✈️", label: "تلگرام", value: stats.telegram, color: "var(--color-accent)" },
+            { icon: "📸", label: "اینستاگرام", value: stats.instagram, color: "#E1306C" },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -124,21 +158,10 @@ export default function DashboardPage() {
             >
               <div style={{ fontSize: "1.75rem" }}>{stat.icon}</div>
               <div>
-                <div
-                  style={{
-                    fontSize: "var(--text-2xl)",
-                    fontWeight: 800,
-                    color: stat.color,
-                  }}
-                >
+                <div style={{ fontSize: "var(--text-2xl)", fontWeight: 800, color: stat.color }}>
                   {stat.value}
                 </div>
-                <div
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-muted)",
-                  }}
-                >
+                <div style={{ fontSize: "var(--text-xs)", color: "var(--color-muted)" }}>
                   {stat.label}
                 </div>
               </div>
@@ -156,14 +179,7 @@ export default function DashboardPage() {
             marginBottom: "var(--space-8)",
           }}
         >
-          <h2
-            style={{
-              fontSize: "var(--text-lg)",
-              fontWeight: 700,
-              marginBottom: "var(--space-5)",
-              color: "var(--color-text)",
-            }}
-          >
+          <h2 style={{ fontSize: "var(--text-lg)", fontWeight: 700, marginBottom: "var(--space-5)", color: "var(--color-text)" }}>
             وضعیت سیستم
           </h2>
           <div
@@ -174,62 +190,102 @@ export default function DashboardPage() {
             }}
           >
             {[
-              { label: "وضعیت", value: "فعال", ok: true },
-              { label: "آخرین اجرا", value: formatDate(mockStats.lastRun), ok: true },
-              { label: "اجرای بعدی", value: mockStats.nextRun, ok: true },
-              { label: "تکرار خبر", value: "۰ مورد", ok: true },
+              { label: "وضعیت", value: hasError ? "خطا در آخرین اجرا" : lastRun ? "فعال" : "بدون اجرا", ok: !hasError && Boolean(lastRun) },
+              { label: "آخرین اجرا", value: lastRun ? formatDate(lastRun.started_at) : "—", ok: Boolean(lastRun) },
+              { label: "یافت‌شده / جدید (آخرین)", value: lastRun ? `${lastRun.found_count} / ${lastRun.new_count}` : "—", ok: true },
+              { label: "خطاهای آخرین اجرا", value: lastRun ? String(lastRun.error_count) : "—", ok: !hasError },
             ].map((item) => (
               <div
                 key={item.label}
-                style={{
-                  background: "var(--color-bg-alt)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "var(--space-4)",
-                }}
+                style={{ background: "var(--color-bg-alt)", borderRadius: "var(--radius-md)", padding: "var(--space-4)" }}
               >
-                <div
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-muted)",
-                    marginBottom: "var(--space-1)",
-                  }}
-                >
+                <div style={{ fontSize: "var(--text-xs)", color: "var(--color-muted)", marginBottom: "var(--space-1)" }}>
                   {item.label}
                 </div>
-                <div
-                  style={{
-                    fontSize: "var(--text-base)",
-                    fontWeight: 600,
-                    color: item.ok ? "var(--color-success)" : "var(--color-error)",
-                  }}
-                >
+                <div style={{ fontSize: "var(--text-base)", fontWeight: 600, color: item.ok ? "var(--color-success)" : "var(--color-error)" }}>
                   {item.value}
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Manual Trigger */}
-          <div
-            style={{
-              marginTop: "var(--space-5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: "var(--space-3)",
-            }}
-          >
-            <p style={{ fontSize: "var(--text-sm)", color: "var(--color-muted)" }}>
-              برای تست می‌توانید پایپ‌لاین را دستی اجرا کنید
+          {lastRunNote && (
+            <p style={{ marginTop: "var(--space-4)", fontSize: "var(--text-xs)", color: "var(--color-error)" }}>
+              یادداشت آخرین اجرا: {lastRunNote}
             </p>
-            <button className="btn btn--primary">
-              ▶ اجرای دستی پایپ‌لاین
-            </button>
-          </div>
+          )}
         </div>
 
         {/* Execution Log Table */}
+        <div
+          style={{
+            background: "var(--color-surface)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-xl)",
+            overflow: "hidden",
+            marginBottom: "var(--space-8)",
+          }}
+        >
+          <div
+            style={{
+              padding: "var(--space-5) var(--space-6)",
+              borderBottom: "1px solid var(--color-border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <h2 style={{ fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--color-text)" }}>
+              لاگ اجراها
+            </h2>
+            <span style={{ fontSize: "var(--text-sm)", color: "var(--color-muted)" }}>
+              {runs.length} اجرا
+            </span>
+          </div>
+
+          {runs.length === 0 ? (
+            <div style={{ padding: "var(--space-6)", color: "var(--color-muted)" }}>
+              هنوز هیچ اجرایی ثبت نشده است.
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table className="dashboard-table">
+                <thead>
+                  <tr>
+                    <th>زمان شروع</th>
+                    <th>نوع</th>
+                    <th>مدت</th>
+                    <th>یافت‌شده</th>
+                    <th>جدید</th>
+                    <th>موفق</th>
+                    <th>خطا</th>
+                    <th>یادداشت</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.map((run) => (
+                    <tr key={run.started_at}>
+                      <td style={{ color: "var(--color-text)" }}>{formatDate(run.started_at)}</td>
+                      <td>{run.trigger === "cron" ? "⏰ cron" : "👆 دستی"}</td>
+                      <td>{getDuration(run.started_at, run.finished_at)}</td>
+                      <td>{run.found_count}</td>
+                      <td style={{ color: "var(--color-primary)", fontWeight: 600 }}>{run.new_count}</td>
+                      <td style={{ color: "var(--color-success)", fontWeight: 600 }}>{run.success_count}</td>
+                      <td style={{ color: run.error_count > 0 ? "var(--color-error)" : "var(--color-muted)", fontWeight: 600 }}>
+                        {run.error_count}
+                      </td>
+                      <td style={{ color: "var(--color-error)", fontSize: "var(--text-xs)", maxWidth: "200px" }}>
+                        {run.note ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Publications Status Table */}
         <div
           style={{
             background: "var(--color-surface)",
@@ -247,142 +303,63 @@ export default function DashboardPage() {
               justifyContent: "space-between",
             }}
           >
-            <h2
-              style={{
-                fontSize: "var(--text-lg)",
-                fontWeight: 700,
-                color: "var(--color-text)",
-              }}
-            >
-              لاگ اجراها
+            <h2 style={{ fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--color-text)" }}>
+              وضعیت انتشار اخبار
             </h2>
-            <span
-              style={{ fontSize: "var(--text-sm)", color: "var(--color-muted)" }}
-            >
-              {mockRuns.length} اجرا
+            <span style={{ fontSize: "var(--text-sm)", color: "var(--color-muted)" }}>
+              {statuses.length} ردیف
             </span>
           </div>
 
-          <div style={{ overflowX: "auto" }}>
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th>زمان شروع</th>
-                  <th>مدت</th>
-                  <th>یافت‌شده</th>
-                  <th>جدید</th>
-                  <th>منتشرشده</th>
-                  <th>وضعیت</th>
-                  <th>خطا</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockRuns.map((run) => (
-                  <tr key={run.id}>
-                    <td style={{ color: "var(--color-text)" }}>
-                      {formatDate(run.started_at)}
-                    </td>
-                    <td>
-                      {run.finished_at
-                        ? getDuration(run.started_at, run.finished_at)
-                        : "—"}
-                    </td>
-                    <td>{run.articles_found}</td>
-                    <td style={{ color: "var(--color-primary)", fontWeight: 600 }}>
-                      {run.articles_new}
-                    </td>
-                    <td style={{ color: "var(--color-success)", fontWeight: 600 }}>
-                      {run.articles_published}
-                    </td>
-                    <td>
-                      <StatusBadge status={run.status} />
-                    </td>
-                    <td
-                      style={{
-                        color: "var(--color-error)",
-                        fontSize: "var(--text-xs)",
-                        maxWidth: "200px",
-                      }}
-                    >
-                      {run.error_message ?? "—"}
-                    </td>
+          {statuses.length === 0 ? (
+            <div style={{ padding: "var(--space-6)", color: "var(--color-muted)" }}>
+              هنوز خبری پردازش نشده است.
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table className="dashboard-table">
+                <thead>
+                  <tr>
+                    <th>خبر</th>
+                    <th>پردازش</th>
+                    <th>مقصد</th>
+                    <th>وضعیت</th>
+                    <th>تلاش</th>
+                    <th>خطا</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Env Checklist */}
-        <div
-          style={{
-            marginTop: "var(--space-8)",
-            background: "var(--color-surface)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-xl)",
-            padding: "var(--space-6)",
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "var(--text-lg)",
-              fontWeight: 700,
-              marginBottom: "var(--space-5)",
-              color: "var(--color-text)",
-            }}
-          >
-            🔧 وضعیت تنظیمات
-          </h2>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-              gap: "var(--space-3)",
-            }}
-          >
-            {[
-              { label: "GEMINI_API_KEY", configured: false },
-              { label: "SUPABASE_URL", configured: false },
-              { label: "TELEGRAM_BOT_TOKEN", configured: false },
-              { label: "INSTAGRAM_ACCESS_TOKEN", configured: false },
-              { label: "Netlify Deploy", configured: true },
-              { label: "Cron Job", configured: true },
-            ].map((item) => (
-              <div
-                key={item.label}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--space-2)",
-                  padding: "var(--space-3)",
-                  background: item.configured
-                    ? "var(--color-success-bg)"
-                    : "var(--color-error-bg)",
-                  borderRadius: "var(--radius-md)",
-                  border: `1px solid ${
-                    item.configured
-                      ? "rgba(16,185,129,0.2)"
-                      : "rgba(239,68,68,0.2)"
-                  }`,
-                }}
-              >
-                <span>{item.configured ? "✓" : "✗"}</span>
-                <span
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    fontWeight: 600,
-                    color: item.configured
-                      ? "var(--color-success)"
-                      : "var(--color-error)",
-                  }}
-                >
-                  {item.label}
-                </span>
-              </div>
-            ))}
-          </div>
+                </thead>
+                <tbody>
+                  {statuses.map((s, idx) => (
+                    <tr key={`${s.slug}-${s.destination}-${idx}`}>
+                      <td style={{ color: "var(--color-text)", maxWidth: "240px" }}>{s.title}</td>
+                      <td>{PROC_LABEL[s.process_status] ?? s.process_status}</td>
+                      <td>{DEST_LABEL[s.destination] ?? s.destination}</td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            s.status === "success"
+                              ? "badge--success"
+                              : s.status === "error"
+                              ? "badge--error"
+                              : "badge--pending"
+                          }`}
+                        >
+                          {s.status === "success" ? "✓ موفق" : s.status === "error" ? "✗ خطا" : "○ منتظر"}
+                        </span>
+                      </td>
+                      <td>{s.attempts}</td>
+                      <td style={{ color: "var(--color-error)", fontSize: "var(--text-xs)", maxWidth: "200px" }}>
+                        {s.error_message ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
+

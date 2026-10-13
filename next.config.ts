@@ -16,10 +16,19 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "images.bama.ir",
       },
+      {
+        // تصاویر منتشرشده از Supabase Storage (برای Next/Image)
+        protocol: "https",
+        hostname: "jcycygforwzryomjeyki.supabase.co",
+      },
+      {
+        protocol: "https",
+        hostname: "**.supabase.co",
+      },
     ],
   },
-  // برای سازگاری با Netlify
-  output: "standalone",
+  // برای Netlify با @netlify/plugin-nextjs نیازی به output: "standalone" نیست
+  // (خودش build را برای Netlify Functions آماده می‌کند).
 };
 
 export default nextConfig;

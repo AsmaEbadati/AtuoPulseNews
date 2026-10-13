@@ -1,56 +1,46 @@
 // TypeScript Types برای پروژه AutoPulse AI
+// هماهنگ با schema جدید Supabase: news_items / publications / run_logs
 
-export interface NewsArticle {
+export interface NewsItem {
   id: string;
   source_url: string;
-  source_hash: string;
-  title: string;
-  image_url: string | null;
   slug: string;
-
-  // محتوای تولیدشده با AI
-  content_website: string | null;   // 900-1100 کاراکتر
-  content_telegram: string | null;
-  content_instagram: string | null;
-
-  // وضعیت انتشار
-  published_website: boolean;
-  published_telegram: boolean;
-  published_instagram: boolean;
-
-  telegram_message_id: string | null;
-  instagram_post_id: string | null;
-
+  title: string;
+  original_text: string | null;      // متن خام از منبع
+  rewritten_text: string | null;     // خروجی AI (900-1100 کاراکتر)
+  tg_caption: string | null;         // کپشن تلگرام
+  ig_caption: string | null;         // کپشن اینستاگرام
+  source_image_url: string | null;   // تصویر اصلی روی سایت منبع
+  image_url: string | null;          // تصویر نهایی ما (Supabase Storage)
+  source_date: string | null;        // تاریخ انتشار روی منبع
+  process_status: "new" | "processing" | "ready" | "error";
+  process_error: string | null;
   created_at: string;
-  published_at: string | null;
+  updated_at: string;
 }
 
-export interface PipelineRun {
+export interface Publication {
+  id: string;
+  news_id: string;
+  destination: "site" | "telegram" | "instagram";
+  status: "pending" | "success" | "error";
+  post_url: string | null;
+  error_message: string | null;
+  attempts: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RunLog {
   id: string;
   started_at: string;
   finished_at: string | null;
-  status: "running" | "success" | "partial" | "failed";
-  articles_found: number;
-  articles_new: number;
-  articles_published: number;
-  error_message: string | null;
-  details: PipelineRunDetails | null;
-}
-
-export interface PipelineRunDetails {
-  articles: ArticleProcessResult[];
-  errors: string[];
-}
-
-export interface ArticleProcessResult {
-  title: string;
-  source_url: string;
-  slug: string;
-  is_duplicate: boolean;
-  published_website: boolean;
-  published_telegram: boolean;
-  published_instagram: boolean;
-  error?: string;
+  trigger: "cron" | "manual";
+  found_count: number;
+  new_count: number;
+  success_count: number;
+  error_count: number;
+  note: string | null;
 }
 
 // خبر خام از scraper
@@ -62,18 +52,27 @@ export interface RawNewsItem {
   published_date: string | null;
 }
 
-// خروجی AI برای هر خبر
+// نتیجه پردازش هر خبر در یک اجرای پایپ‌لاین
+export interface ArticleProcessResult {
+  title: string;
+  source_url: string;
+  slug: string;
+  is_duplicate: boolean;
+  error?: string;
+}
+
+export interface PipelineRunDetails {
+  articles: ArticleProcessResult[];
+  errors: string[];
+}
+
+// خروجی AI برای هر خبر (فاز ۳)
 export interface AIGeneratedContent {
-  content_website: string;    // دقیقاً 900-1100 کاراکتر
-  content_telegram: string;   // فرمت Markdown
-  content_instagram: string;  // کپشن + هشتگ
+  rewritten_text: string;   // دقیقاً 900-1100 کاراکتر
+  tg_caption: string;       // فرمت Markdown
+  ig_caption: string;       // کپشن + هشتگ
 }
 
-// وضعیت پایپ‌لاین برای نمایش در UI
-export type PublishStatus = "pending" | "success" | "failed" | "skipped";
+// وضعیت انتشار برای نمایش در UI
+export type PublishStatus = "pending" | "success" | "error" | "skipped";
 
-export interface PublishStatusMap {
-  website: PublishStatus;
-  telegram: PublishStatus;
-  instagram: PublishStatus;
-}

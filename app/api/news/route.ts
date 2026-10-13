@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase";
+import { getPublicClient, isPublicSupabaseConfigured } from "@/lib/supabase-public";
 
 // همیشه داده تازه بخوان (ISR/کاش نکن) چون محتوا به‌صورت خودکار به‌روز می‌شود.
 export const dynamic = "force-dynamic";
@@ -8,9 +8,12 @@ export const dynamic = "force-dynamic";
  * GET /api/news
  * لیست اخبار منتشرشده برای نمایش در صفحه اصلی.
  * Query param اختیاری: ?limit=N (پیش‌فرض ۵۰)
+ *
+ * این endpoint فقط می‌خواند (از view عمومی public_news) و از anon key
+ * استفاده می‌کند، پس نیازی به service_role روی Netlify نیست.
  */
 export async function GET(request: Request) {
-  if (!isSupabaseConfigured) {
+  if (!isPublicSupabaseConfigured) {
     return NextResponse.json(
       { error: "Database not configured", articles: [] },
       { status: 503 }
@@ -22,14 +25,17 @@ export async function GET(request: Request) {
   const limit = Number.isFinite(limitParam) && limitParam > 0 && limitParam <= 200 ? limitParam : 50;
 
   try {
-    const db = getSupabaseClient();
-    // فقط اخبار منتشرشده در وب‌سایت را برمی‌گردانیم (جدیدترین اول)
+    const db = getPublicClient();
+    if (!db) {
+      return NextResponse.json(
+        { error: "Database client unavailable", articles: [] },
+        { status: 503 }
+      );
+    }
+    // فقط اخبار منتشرشده در وب‌سایت را برمی‌گردانیم (از view عمومی، جدیدترین اول)
     const { data, error } = await db
-      .from("news_articles")
-      .select(
-        "id, slug, title, image_url, content_website, published_website, published_telegram, published_instagram, created_at"
-      )
-      .eq("published_website", true)
+      .from("public_news")
+      .select("id, slug, title, body, image_url, source_url, created_at")
       .order("created_at", { ascending: false })
       .limit(limit);
 

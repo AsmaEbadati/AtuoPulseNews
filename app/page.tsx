@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getPublicClient } from "@/lib/supabase-public";
 
 export const metadata: Metadata = {
   title: "اخبار خودرو",
@@ -7,45 +8,31 @@ export const metadata: Metadata = {
     "آخرین اخبار بازار خودرو ایران، پردازش‌شده با هوش مصنوعی و انتشار خودکار",
 };
 
-// --- Mock data برای فاز اول (قبل از اتصال به دیتابیس) ---
-const mockArticles = [
-  {
-    id: "1",
-    slug: "nemo-1",
-    title: "قیمت‌گذاری جدید خودروهای داخلی در آبان ماه",
-    image_url: null,
-    created_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    published_website: true,
-    published_telegram: true,
-    published_instagram: false,
-    content_website:
-      "بر اساس آخرین مصوبات شورای رقابت، قیمت‌گذاری محصولات خودروسازان داخلی در ماه آبان مورد بازبینی قرار گرفت. این تغییرات شامل چندین مدل پرفروش از جمله پژو ۲۰۶، سمند و تیبا می‌شود که انتظار می‌رود تأثیر قابل توجهی بر بازار خودرو کشور داشته باشد.",
-  },
-  {
-    id: "2",
-    slug: "nemo-2",
-    title: "رونمایی از محصول جدید سایپا با موتور توربو",
-    image_url: null,
-    created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    published_website: true,
-    published_telegram: true,
-    published_instagram: true,
-    content_website:
-      "گروه خودروسازی سایپا از محصول تازه خود با موتور توربو شارژ ۱.۵ لیتری رونمایی کرد. این خودرو با توان ۱۳۵ اسب بخار و گشتاور ۲۳۵ نیوتون متر، پیشرفته‌ترین محصول این خودروساز در تاریخ خود محسوب می‌شود.",
-  },
-  {
-    id: "3",
-    slug: "nemo-3",
-    title: "واردات خودروهای هیبریدی در سال جاری دو برابر شد",
-    image_url: null,
-    created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-    published_website: true,
-    published_telegram: false,
-    published_instagram: false,
-    content_website:
-      "آمار گمرک ایران نشان می‌دهد که واردات خودروهای هیبریدی در ۹ ماهه سال جاری نسبت به مدت مشابه سال گذشته بیش از ۱۰۰ درصد رشد داشته است. این روند با توجه به افزایش آگاهی مصرف‌کنندگان از مزایای خودروهای کم‌مصرف ادامه خواهد داشت.",
-  },
-];
+// خواندن اخبار منتشرشده روی سایت از view عمومی public_news (فقط خواندن با anon key)
+async function getPublishedArticles() {
+  const db = getPublicClient();
+  if (!db) return [];
+  const { data, error } = await db
+    .from("public_news")
+    .select("id, slug, title, body, image_url, source_url, created_at")
+    .order("created_at", { ascending: false })
+    .limit(60);
+  if (error) {
+    console.error("[home] public_news fetch failed:", error.message);
+    return [];
+  }
+  return data ?? [];
+}
+
+interface Article {
+  id: string;
+  slug: string;
+  title: string;
+  body: string | null;
+  image_url: string | null;
+  source_url: string | null;
+  created_at: string;
+}
 
 function formatDate(dateString: string) {
   const date = new Date(dateString);
@@ -59,39 +46,11 @@ function formatDate(dateString: string) {
   return `${diffD} روز پیش`;
 }
 
-function PublishBadges({
-  website,
-  telegram,
-  instagram,
-}: {
-  website: boolean;
-  telegram: boolean;
-  instagram: boolean;
-}) {
-  return (
-    <div className="publish-badges">
-      <span className={`badge badge--${website ? "success" : "pending"}`}>
-        {website ? "✓" : "○"} سایت
-      </span>
-      <span className={`badge badge--${telegram ? "success" : "pending"}`}>
-        {telegram ? "✓" : "○"} تلگرام
-      </span>
-      <span className={`badge badge--${instagram ? "success" : "pending"}`}>
-        {instagram ? "✓" : "○"} اینستاگرام
-      </span>
-    </div>
-  );
-}
-
-export default function HomePage() {
-  const publishedCount = mockArticles.filter((a) => a.published_website).length;
-  const totalPublished = mockArticles.reduce((acc, a) => {
-    let count = 0;
-    if (a.published_website) count++;
-    if (a.published_telegram) count++;
-    if (a.published_instagram) count++;
-    return acc + count;
-  }, 0);
+export default async function HomePage() {
+  const articles: Article[] = await getPublishedArticles();
+  const publishedCount = articles.length;
+  // کل انتشارها = هر خبر روی سایت منتشر شده (۱ مقصد در دسترس این view)
+  const totalPublished = articles.length;
 
   return (
     <>
@@ -180,12 +139,12 @@ export default function HomePage() {
                 color: "var(--color-muted)",
               }}
             >
-              {mockArticles.length} خبر
+              {articles.length} خبر
             </span>
           </div>
 
           {/* Articles Grid */}
-          {mockArticles.length === 0 ? (
+          {articles.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state__icon">📰</div>
               <div className="empty-state__title">هنوز خبری منتشر نشده</div>
@@ -195,7 +154,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="news-grid">
-              {mockArticles.map((article, i) => (
+              {articles.map((article, i) => (
                 <Link
                   href={`/news/${article.slug}`}
                   key={article.id}
@@ -232,15 +191,16 @@ export default function HomePage() {
                     <h3 className="news-card__title">{article.title}</h3>
 
                     <p className="news-card__excerpt">
-                      {article.content_website}
+                      {article.body?.slice(0, 150) ?? ""}…
                     </p>
 
                     <div className="news-card__footer">
-                      <PublishBadges
-                        website={article.published_website}
-                        telegram={article.published_telegram}
-                        instagram={article.published_instagram}
-                      />
+                      <span
+                        className="badge badge--success"
+                        style={{ fontSize: "10px" }}
+                      >
+                        ✓ منتشرشده
+                      </span>
                       <span
                         className="btn btn--ghost"
                         style={{ padding: "0", fontSize: "var(--text-sm)" }}

@@ -1,28 +1,17 @@
-import { createHash } from "crypto";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
 
 /**
- * تولید hash پایدار (SHA-256) از یک رشته.
- * برای مقایسه سریع و مطمئن source_url جهت جلوگیری از انتشار تکراری.
- */
-export function hashString(input: string): string {
-  return createHash("sha256").update(input.trim(), "utf8").digest("hex");
-}
-
-/**
- * بررسی تکراری بودن یک source_url.
+ * Dedup بر اساس source_url (که در schema جدید کلید یکتای جدول news_items است).
  * اول به cache حافظه‌ای نگاه می‌کند تا از فراخوانی‌های تکراری DB جلوگیری شود،
- * سپس در صورت نبود، از جدول news_articles جست‌وجو می‌کند.
+ * سپس در صورت نبود، از جدول news_items جست‌وجو می‌کند.
  *
  * @returns true اگر این منبع قبلاً ثبت شده باشد (تکراری است)
  */
 const memoryCache = new Set<string>();
 
 export async function isDuplicate(sourceUrl: string): Promise<boolean> {
-  const hash = hashString(sourceUrl);
-
   // 1) بررسی cache حافظه‌ای
-  if (memoryCache.has(hash)) return true;
+  if (memoryCache.has(sourceUrl)) return true;
 
   // 2) اگر Supabase تنظیم نشده، فقط بر اساس cache تصمیم می‌گیریم
   if (!isSupabaseConfigured) {
@@ -32,22 +21,20 @@ export async function isDuplicate(sourceUrl: string): Promise<boolean> {
   try {
     const db = getSupabaseClient();
     const { data, error } = await db
-      .from("news_articles")
+      .from("news_items")
       .select("id")
-      .eq("source_hash", hash)
+      .eq("source_url", sourceUrl)
       .limit(1)
       .maybeSingle();
 
     if (error) {
       console.error("[dedup] Supabase query error:", error.message);
-      // در صورت خطای DB، محافظه‌کارانه false برمی‌گردانیم (خبر تکراری منتشر می‌شود)
-      // اما این موارد باید در لاگ‌ها رصد شوند. برای اطمینان بیشتر می‌توان
-      // رفتار را به true تغییر داد؛ اینجا انتخاب false است تا پایپ‌لاین متوقف نشود.
+      // محافظه‌کارانه false تا پایپ‌لاین متوقف نشود.
       return false;
     }
 
     const dup = data !== null;
-    if (dup) memoryCache.add(hash);
+    if (dup) memoryCache.add(sourceUrl);
     return dup;
   } catch (err) {
     console.error("[dedup] Unexpected error:", err);
@@ -56,17 +43,15 @@ export async function isDuplicate(sourceUrl: string): Promise<boolean> {
 }
 
 /**
- * بارگذاری hash همه source_url های موجود در DB به cache حافظه‌ای.
+ * بارگذاری source_url همه رکوردهای موجود در DB به cache حافظه‌ای.
  * در ابتدای هر اجرای پایپ‌لاین فراخوانی می‌شود تا تعداد query ها کم شود.
  */
-export async function preloadExistingHashes(): Promise<number> {
+export async function preloadExistingUrls(): Promise<number> {
   if (!isSupabaseConfigured) return 0;
 
   try {
     const db = getSupabaseClient();
-    const { data, error } = await db
-      .from("news_articles")
-      .select("source_hash");
+    const { data, error } = await db.from("news_items").select("source_url");
 
     if (error) {
       console.error("[dedup] preload error:", error.message);
@@ -75,8 +60,8 @@ export async function preloadExistingHashes(): Promise<number> {
 
     let count = 0;
     for (const row of data ?? []) {
-      if (row.source_hash) {
-        memoryCache.add(row.source_hash);
+      if (row.source_url) {
+        memoryCache.add(row.source_url);
         count++;
       }
     }
@@ -91,3 +76,4 @@ export async function preloadExistingHashes(): Promise<number> {
 export function clearDedupCache(): void {
   memoryCache.clear();
 }
+
