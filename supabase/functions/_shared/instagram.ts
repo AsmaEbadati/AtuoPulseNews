@@ -76,6 +76,8 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
 
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
+    // secret هم در بدنه (برای Router/Filter در Make) و هم در هدر (fallback).
+    // فیلتر Make را روی فیلد بدنهٔ «secret» بگذار.
     if (secret) headers["x-make-secret"] = secret;
 
     const res = await fetch(webhook, {
@@ -86,6 +88,7 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
         title: news.title,
         image_url: photo,
         caption,
+        secret,
       }),
       signal: AbortSignal.timeout(90000),
     });
