@@ -6,6 +6,7 @@ import { scrapeArticleBody } from "./article";
 import { generateContent, isAIConfigured } from "./ai";
 import { publishToTelegram } from "./publisher/telegram";
 import { publishToSite } from "./publisher/site";
+import { publishToInstagram } from "./publisher/instagram";
 import type {
   ArticleProcessResult,
   PipelineRunDetails,
@@ -311,10 +312,12 @@ export async function processPendingArticles(limit = 3): Promise<ProcessPendingR
 }
 
 /**
- * فاز ۴ — انتشار اخبار «ready» در مقاصد (فعلاً تلگرام).
+ * فاز ۴ — انتشار اخبار «ready» در مقاصد: سایت، تلگرام، اینستاگرام.
  *
  * برای هر خبر ready (قدیمی‌ترین اول):
- *   - تلگرام: publishToTelegram (idempotent از طریق جدول publications)
+ *   - سایت:      publishToSite      (idempotent)
+ *   - تلگرام:    publishToTelegram  (idempotent)
+ *   - اینستاگرام: publishToInstagram (idempotent، از طریق Make)
  *
  * idempotency کل زنجیره تضمین‌شده است: اگر news_id قبلاً برای مقصد
  * موردنظر success شده باشد، claim_publication آن را رد می‌کند.
@@ -323,10 +326,12 @@ export interface PublishReadyResult {
   processed: number;
   site: { success: number; skipped: number; error: number };
   telegram: { success: number; skipped: number; error: number };
+  instagram: { success: number; skipped: number; error: number };
   results: Array<{
     title: string;
     site?: { status: "success" | "skipped" | "error"; post_url?: string; error?: string };
     telegram?: { status: "success" | "skipped" | "error"; post_url?: string; error?: string };
+    instagram?: { status: "success" | "skipped" | "error"; post_url?: string; error?: string };
   }>;
 }
 
@@ -335,7 +340,9 @@ export async function publishReadyArticles(limit = 5): Promise<PublishReadyResul
 
   const { data: ready, error: selErr } = await db
     .from("news_items")
-    .select("id, slug, title, rewritten_text, tg_caption, image_url, source_image_url")
+    .select(
+      "id, slug, title, rewritten_text, tg_caption, ig_caption, image_url, source_image_url"
+    )
     .eq("process_status", "ready")
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -349,6 +356,9 @@ export async function publishReadyArticles(limit = 5): Promise<PublishReadyResul
   let tgSuccess = 0,
     tgSkipped = 0,
     tgError = 0;
+  let igSuccess = 0,
+    igSkipped = 0,
+    igError = 0;
 
   for (const item of ready ?? []) {
     // 1) انتشار در سایت (اول سایت، چون پایدارترین و سریع‌ترین مقصد است)
@@ -376,10 +386,24 @@ export async function publishReadyArticles(limit = 5): Promise<PublishReadyResul
     else tgError++;
     console.log(`[pipeline:publish] ${item.title} → telegram:${tg.status}`);
 
+    // 3) انتشار در اینستاگرام (از طریق Make)
+    const ig = await publishToInstagram({
+      id: item.id,
+      title: item.title,
+      ig_caption: item.ig_caption,
+      image_url: item.image_url,
+      source_image_url: item.source_image_url,
+    });
+    if (ig.status === "success") igSuccess++;
+    else if (ig.status === "skipped") igSkipped++;
+    else igError++;
+    console.log(`[pipeline:publish] ${item.title} → instagram:${ig.status}`);
+
     results.push({
       title: item.title,
       site: { status: site.status, post_url: site.post_url, error: site.error },
       telegram: { status: tg.status, post_url: tg.post_url, error: tg.error },
+      instagram: { status: ig.status, post_url: ig.post_url, error: ig.error },
     });
   }
 
@@ -387,6 +411,7 @@ export async function publishReadyArticles(limit = 5): Promise<PublishReadyResul
     processed: (ready ?? []).length,
     site: { success: siteSuccess, skipped: siteSkipped, error: siteError },
     telegram: { success: tgSuccess, skipped: tgSkipped, error: tgError },
+    instagram: { success: igSuccess, skipped: igSkipped, error: igError },
     results,
   };
 }

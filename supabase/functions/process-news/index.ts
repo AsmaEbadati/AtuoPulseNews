@@ -16,6 +16,7 @@ import { getServiceClient } from "../_shared/supabase.ts";
 import { scrapeArticleBody } from "../_shared/bama.ts";
 import { generateContent } from "../_shared/ai.ts";
 import { publishToTelegram } from "../_shared/telegram.ts";
+import { publishToInstagram } from "../_shared/instagram.ts";
 
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -145,6 +146,17 @@ Deno.serve(async (req) => {
     });
     result.telegram = tg.status;
     if (tg.post_url) result.telegram_url = tg.post_url;
+
+    // 6) انتشار اینستاگرام از طریق Make (idempotent)
+    const ig = await publishToInstagram({
+      id,
+      title: item.title,
+      ig_caption: content.ig_caption,
+      image_url: betterImage,
+      source_image_url: betterImage,
+    });
+    result.instagram = ig.status;
+    if (ig.post_url) result.instagram_url = ig.post_url;
 
     return new Response(JSON.stringify({ ok: true, ...result }), {
       status: 200,
