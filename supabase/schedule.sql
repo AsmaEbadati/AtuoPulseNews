@@ -19,23 +19,41 @@
 -- ============================================================
 
 -- ---------- 1) ذخیرهٔ secrets در Vault (idempotent، یک‌بار) ----------
+-- vault.create_secret یک تابع است (نه INSERT)، پس با DO + IF NOT EXISTS
+-- مطمئن می‌شویم اگر از قبل وجود دارد دوباره ساخته نشود.
+
 -- pipeline_url: آدرس تابع سبک run-pipeline
-select vault.create_secret(
-  'https://jcycygforwzryomjeyki.supabase.co/functions/v1/run-pipeline',
-  'pipeline_url'
-) on conflict (name) do nothing;
+do $$
+begin
+  if not exists (select 1 from vault.secrets where name = 'pipeline_url') then
+    perform vault.create_secret(
+      'https://jcycygforwzryomjeyki.supabase.co/functions/v1/run-pipeline',
+      'pipeline_url'
+    );
+  end if;
+end $$;
 
 -- process_url: آدرس تابع سنگین process-news (برای cron پایشی)
-select vault.create_secret(
-  'https://jcycygforwzryomjeyki.supabase.co/functions/v1/process-news',
-  'process_url'
-) on conflict (name) do nothing;
+do $$
+begin
+  if not exists (select 1 from vault.secrets where name = 'process_url') then
+    perform vault.create_secret(
+      'https://jcycygforwzryomjeyki.supabase.co/functions/v1/process-news',
+      'process_url'
+    );
+  end if;
+end $$;
 
 -- pipeline_secret: همان PIPELINE_SECRET_KEY در .env
-select vault.create_secret(
-  'cf12eae2d576f40ef09812d66f8df1289134fbf0650a185e274c7befd2353942',
-  'pipeline_secret'
-) on conflict (name) do nothing;
+do $$
+begin
+  if not exists (select 1 from vault.secrets where name = 'pipeline_secret') then
+    perform vault.create_secret(
+      'cf12eae2d576f40ef09812d66f8df1289134fbf0650a185e274c7befd2353942',
+      'pipeline_secret'
+    );
+  end if;
+end $$;
 
 -- ---------- 2) cron A: روزانه → run-pipeline ----------
 -- '30 6 * * *' = هر روز 06:30 UTC = 10:00 تهران (UTC+03:30)
