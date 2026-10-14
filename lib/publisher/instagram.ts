@@ -1,41 +1,35 @@
 import { getSupabaseClient, isSupabaseConfigured } from "../supabase";
 
 /**
- * فاز ۴ج — انتشار در اینستاگرام از طریق Make (Integromat).
+ * فاز ۴ج — انتشار در اینستاگرام با Instagram Graph API (مستقیم، بدون Make).
  *
- * چرا Make؟ چون Instagram Graph API مستقیماً نیاز به توکن دسترسی تجاری،
- * Instagram Business Account متصل به یک صفحهٔ فیس‌بوک، و وریفای اپ دارد.
- * Make همهٔ این‌ها را با یک Scenario ساده مدیریت می‌کند:
+ * جریان دو مرحله‌ای Content Publishing API:
+ *   1) POST /{ig-user-id}/media?image_url=...&caption=...  → creation_id
+ *   2) POST /{ig-user-id}/media_publish?creation_id=...    → media_id
+ *   3) GET  /{media_id}?fields=permalink                   → permalink (best-effort)
  *
- *   Make Scenario:
- *     1. Custom Webhook      → ما به آن POST می‌زنیم
- *     2. Router/Filter       → بررسی x-make-secret
- *     3. Instagram Business: Create a Photo Post  (image_url + ig_caption)
- *     4. Instagram: Get Media → گرفتن permalink
- *     5. Webhook Response    → { status, post_url }
+ * idempotency: ابتدا claim_publication(news_id, 'instagram')؛ اگر قبلاً success
+ * شده باشد رد می‌شود.
  *
- * جریان ما (idempotent، دقیقاً مثل تلگرام/سایت):
- *   1) claim_publication(news_id, 'instagram') → جلوگیری از تکرار/هم‌زمانی
- *   2) POST به MAKE_WEBHOOK_URL با هدر x-make-secret
- *      body: { news_id, image_url, caption, title }
- *   3) منتظر پاسخ Make می‌مانیم: { status: "success", post_url } یا خطا
- *   4) complete_publication(...) با نتیجه + permalink
- *
- * نکته: ارسال «هم‌زمان و با انتظار» است (نه fire-and-forget)، چون Make باید
- * عکس را پست کند و permalink را برگرداند. تایم‌اوت سخاوتمندانه است.
+ * env لازم: INSTAGRAM_ACCESS_TOKEN و INSTAGRAM_ACCOUNT_ID
+ * (اکانت Business/Creator متصل به صفحهٔ فیسبوک، مجوز instagram_content_publish).
  */
 
-export const isInstagramConfigured = Boolean(process.env.MAKE_WEBHOOK_URL);
+const GRAPH_VERSION = "v21.0";
+const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+
+export const isInstagramConfigured = Boolean(
+  process.env.INSTAGRAM_ACCESS_TOKEN && process.env.INSTAGRAM_ACCOUNT_ID
+);
 
 function requireConfig() {
-  const webhook = process.env.MAKE_WEBHOOK_URL;
-  if (!webhook) throw new Error("MAKE_WEBHOOK_URL is not configured.");
-  return { webhook, secret: process.env.MAKE_SECRET ?? "" };
+  const token = process.env.INSTAGRAM_ACCESS_TOKEN;
+  const accountId = process.env.INSTAGRAM_ACCOUNT_ID;
+  if (!token) throw new Error("INSTAGRAM_ACCESS_TOKEN is not configured.");
+  if (!accountId) throw new Error("INSTAGRAM_ACCOUNT_ID is not configured.");
+  return { token, accountId };
 }
 
-// ------------------------------------------------------------------
-// idempotency با RPC های schema (مثل تلگرام/سایت)
-// ------------------------------------------------------------------
 async function claimPublication(newsId: string): Promise<boolean> {
   const db = getSupabaseClient();
   const { data, error } = await db.rpc("claim_publication", {
@@ -71,7 +65,6 @@ export interface PublishResult {
   error?: string;
 }
 
-/** حداقل داده‌ای که برای انتشار اینستاگرام لازم است. */
 export interface InstagramNews {
   id: string;
   title: string;
@@ -80,17 +73,54 @@ export interface InstagramNews {
   source_image_url: string | null;
 }
 
-/** پاسخ Make از Webhook Response ماژول. */
-interface MakeResponse {
-  status?: "success" | "error";
-  post_url?: string;
-  error?: string;
+/** فراخوانی POST به Graph API و بررسی خطا. */
+async function graphPost(path: string, params: Record<string, string>): Promise<any> {
+  const { token } = requireConfig();
+  const url = new URL(`${GRAPH_BASE}/${path}`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  url.searchParams.set("access_token", token);
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    signal: AbortSignal.timeout(60000),
+  });
+  const json = (await res.json()) as any;
+  if (!res.ok || json.error) {
+    const msg = json?.error?.message ?? `HTTP ${res.status}`;
+    throw new Error(`Instagram ${path} failed: ${msg}`);
+  }
+  return json;
+}
+
+async function graphGet(path: string, params: Record<string, string>): Promise<any> {
+  const { token } = requireConfig();
+  const url = new URL(`${GRAPH_BASE}/${path}`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  url.searchParams.set("access_token", token);
+
+  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(30000) });
+  const json = (await res.json()) as any;
+  if (!res.ok || json.error) {
+    const msg = json?.error?.message ?? `HTTP ${res.status}`;
+    throw new Error(`Instagram ${path} failed: ${msg}`);
+  }
+  return json;
+}
+
+/** گرفتن permalink یک مدیای منتشرشده (best-effort). */
+async function getPermalink(mediaId: string): Promise<string | null> {
+  try {
+    const json = await graphGet(mediaId, { fields: "permalink" });
+    return (json.permalink as string) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * انتشار یک خبر در اینستاگرام از طریق Make.
- * - اگر MAKE_WEBHOOK_URL تنظیم نشده ⇒ skipped.
- * - اگر تصویر نباشد ⇒ error (اینستاگرام بدون عکس پست نمی‌کند).
+ * انتشار یک خبر در اینستاگرام (Graph API مستقیم).
+ * - اگر توکن/اکانت تنظیم نشده ⇒ skipped.
+ * - اگر تصویر نباشد یا HTTPS نباشد ⇒ error.
  * - اگر قبلاً success شده ⇒ skipped (idempotent).
  */
 export async function publishToInstagram(news: InstagramNews): Promise<PublishResult> {
@@ -107,6 +137,14 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
       error: "Instagram requires an image; none available.",
     };
   }
+  if (!photo.startsWith("https://")) {
+    return {
+      news_id: news.id,
+      destination: "instagram",
+      status: "error",
+      error: `Image URL must be public HTTPS: ${photo}`,
+    };
+  }
 
   // 1) claim (idempotency)
   let claimed = false;
@@ -120,51 +158,32 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
     return { news_id: news.id, destination: "instagram", status: "skipped" };
   }
 
-  // 2) ساخت محتوا و POST به Make
+  // 2) ساخت container و publish
   const caption = (news.ig_caption && news.ig_caption.trim()) || news.title;
-  const { webhook, secret } = requireConfig();
+  const { accountId } = requireConfig();
 
   try {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    // secret هم در بدنه (برای Router/Filter در Make) و هم در هدر (fallback).
-    // فیلتر Make را روی فیلد بدنهٔ «secret» بگذار.
-    if (secret) headers["x-make-secret"] = secret;
-
-    const res = await fetch(webhook, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        news_id: news.id,
-        title: news.title,
-        image_url: photo,
-        caption,
-        secret,
-      }),
-      // Make ممکن است چند ثانیه طول بکشد (آپلود عکس + گرفتن permalink)
-      signal: AbortSignal.timeout(90000),
+    // 2a) ساخت container
+    const container = await graphPost(`${accountId}/media`, {
+      image_url: photo,
+      caption,
     });
+    const creationId = container.id as string;
+    if (!creationId) throw new Error("Graph API did not return a creation id.");
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      throw new Error(`Make webhook HTTP ${res.status}: ${errText.slice(0, 200)}`);
-    }
+    // 2b) publish container
+    const published = await graphPost(`${accountId}/media_publish`, {
+      creation_id: creationId,
+    });
+    const mediaId = published.id as string;
 
-    // Make می‌تواند JSON برگرداند (Webhook Response) یا متن ساده
-    let body: MakeResponse = {};
-    try {
-      body = (await res.json()) as MakeResponse;
-    } catch {
-      // اگر Make پاسخ JSON نداد، موفق فرض می‌کنیم (post_url ناشناس)
-      body = {};
-    }
+    // 2c) permalink (best-effort)
+    const postUrl = mediaId ? await getPermalink(mediaId) : null;
 
-    if (body.status === "error") {
-      throw new Error(body.error ?? "Make reported an error.");
-    }
-
-    const postUrl = body.post_url ?? null;
     await completePublication(news.id, "success", postUrl, null);
-    console.log(`[instagram] ✅ published "${news.title}" via Make${postUrl ? ` → ${postUrl}` : ""}`);
+    console.log(
+      `[instagram] ✅ published "${news.title}" (media ${mediaId})${postUrl ? ` → ${postUrl}` : ""}`
+    );
     return {
       news_id: news.id,
       destination: "instagram",
@@ -178,3 +197,4 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
     return { news_id: news.id, destination: "instagram", status: "error", error: msg };
   }
 }
+

@@ -1,17 +1,28 @@
-// فاز ۴ج — انتشار اینستاگرام از طریق Make (Integromat)
+// فاز ۴ج — انتشار اینستاگرام با Instagram Graph API (مستقیم، بدون Make)
 // پورت‌شده از lib/publisher/instagram.ts — idempotency با RPC های schema.
 //
-// Make Scenario: Custom Webhook → Router(x-make-secret) → Instagram
-//   Create Photo Post → Get Media (permalink) → Webhook Response {status, post_url}
+// جریان دو مرحله‌ای Content Publishing API:
+//   1) POST /{ig-user-id}/media?image_url=...&caption=...  → creation_id
+//   2) POST /{ig-user-id}/media_publish?creation_id=...    → media_id
+//   3) GET  /{media_id}?fields=permalink                   → permalink (best-effort)
+//
+// env لازم: INSTAGRAM_ACCESS_TOKEN و INSTAGRAM_ACCOUNT_ID
 
 import { getServiceClient } from "./supabase.ts";
 
-export const isInstagramConfigured = Boolean(Deno.env.get("MAKE_WEBHOOK_URL"));
+const GRAPH_VERSION = "v21.0";
+const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+
+export const isInstagramConfigured = Boolean(
+  Deno.env.get("INSTAGRAM_ACCESS_TOKEN") && Deno.env.get("INSTAGRAM_ACCOUNT_ID")
+);
 
 function requireConfig() {
-  const webhook = Deno.env.get("MAKE_WEBHOOK_URL");
-  if (!webhook) throw new Error("MAKE_WEBHOOK_URL is not configured.");
-  return { webhook, secret: Deno.env.get("MAKE_SECRET") ?? "" };
+  const token = Deno.env.get("INSTAGRAM_ACCESS_TOKEN");
+  const accountId = Deno.env.get("INSTAGRAM_ACCOUNT_ID");
+  if (!token) throw new Error("INSTAGRAM_ACCESS_TOKEN is not configured.");
+  if (!accountId) throw new Error("INSTAGRAM_ACCOUNT_ID is not configured.");
+  return { token, accountId };
 }
 
 export interface InstagramNews {
@@ -30,10 +41,46 @@ export interface PublishResult {
   error?: string;
 }
 
-interface MakeResponse {
-  status?: "success" | "error";
-  post_url?: string;
-  error?: string;
+async function graphPost(path: string, params: Record<string, string>): Promise<any> {
+  const { token } = requireConfig();
+  const url = new URL(`${GRAPH_BASE}/${path}`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  url.searchParams.set("access_token", token);
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    signal: AbortSignal.timeout(60000),
+  });
+  const json = (await res.json()) as any;
+  if (!res.ok || json.error) {
+    const msg = json?.error?.message ?? `HTTP ${res.status}`;
+    throw new Error(`Instagram ${path} failed: ${msg}`);
+  }
+  return json;
+}
+
+async function graphGet(path: string, params: Record<string, string>): Promise<any> {
+  const { token } = requireConfig();
+  const url = new URL(`${GRAPH_BASE}/${path}`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  url.searchParams.set("access_token", token);
+
+  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(30000) });
+  const json = (await res.json()) as any;
+  if (!res.ok || json.error) {
+    const msg = json?.error?.message ?? `HTTP ${res.status}`;
+    throw new Error(`Instagram ${path} failed: ${msg}`);
+  }
+  return json;
+}
+
+async function getPermalink(mediaId: string): Promise<string | null> {
+  try {
+    const json = await graphGet(mediaId, { fields: "permalink" });
+    return (json.permalink as string) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function publishToInstagram(news: InstagramNews): Promise<PublishResult> {
@@ -48,6 +95,14 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
       destination: "instagram",
       status: "error",
       error: "Instagram requires an image; none available.",
+    };
+  }
+  if (!photo.startsWith("https://")) {
+    return {
+      news_id: news.id,
+      destination: "instagram",
+      status: "error",
+      error: `Image URL must be public HTTPS: ${photo}`,
     };
   }
 
@@ -70,46 +125,25 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
     return { news_id: news.id, destination: "instagram", status: "skipped" };
   }
 
-  // 2) ساخت محتوا و POST به Make
+  // 2) ساخت container و publish
   const caption = (news.ig_caption && news.ig_caption.trim()) || news.title;
-  const { webhook, secret } = requireConfig();
+  const { accountId } = requireConfig();
 
   try {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    // secret هم در بدنه (برای Router/Filter در Make) و هم در هدر (fallback).
-    // فیلتر Make را روی فیلد بدنهٔ «secret» بگذار.
-    if (secret) headers["x-make-secret"] = secret;
-
-    const res = await fetch(webhook, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        news_id: news.id,
-        title: news.title,
-        image_url: photo,
-        caption,
-        secret,
-      }),
-      signal: AbortSignal.timeout(90000),
+    const container = await graphPost(`${accountId}/media`, {
+      image_url: photo,
+      caption,
     });
+    const creationId = container.id as string;
+    if (!creationId) throw new Error("Graph API did not return a creation id.");
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      throw new Error(`Make webhook HTTP ${res.status}: ${errText.slice(0, 200)}`);
-    }
+    const published = await graphPost(`${accountId}/media_publish`, {
+      creation_id: creationId,
+    });
+    const mediaId = published.id as string;
 
-    let body: MakeResponse = {};
-    try {
-      body = (await res.json()) as MakeResponse;
-    } catch {
-      body = {};
-    }
+    const postUrl = mediaId ? await getPermalink(mediaId) : null;
 
-    if (body.status === "error") {
-      throw new Error(body.error ?? "Make reported an error.");
-    }
-
-    const postUrl = body.post_url ?? null;
     await db.rpc("complete_publication", {
       p_news_id: news.id,
       p_destination: "instagram",
@@ -117,7 +151,9 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
       p_post_url: postUrl,
       p_error: null,
     });
-    console.log(`[instagram] ✅ published "${news.title}" via Make${postUrl ? ` → ${postUrl}` : ""}`);
+    console.log(
+      `[instagram] ✅ published "${news.title}" (media ${mediaId})${postUrl ? ` → ${postUrl}` : ""}`
+    );
     return {
       news_id: news.id,
       destination: "instagram",
