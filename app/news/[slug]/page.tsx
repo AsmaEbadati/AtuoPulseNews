@@ -1,43 +1,20 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getPublicClient } from "@/lib/supabase-public";
+import { getArticleWithLinks } from "@/lib/news-links";
+import { Icon, IconBox } from "../../components/Icons";
+import { NewsLinkPills } from "../../components/NewsLinkPills";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
 };
 
-interface Article {
-  id: string;
-  slug: string;
-  title: string;
-  body: string | null;
-  image_url: string | null;
-  source_url: string | null;
-  created_at: string;
-}
-
-// خواندن یک خبر منتشرشده از view عمومی public_news (فقط خواندن با anon key).
-// این view فقط خبرهایی را برمی‌گرداند که روی سایت success شده‌اند.
-async function getArticle(slug: string): Promise<Article | null> {
-  const db = getPublicClient();
-  if (!db) return null;
-  const { data, error } = await db
-    .from("public_news")
-    .select("id, slug, title, body, image_url, source_url, created_at")
-    .eq("slug", slug)
-    .maybeSingle();
-
-  if (error) {
-    console.error("[news] public_news fetch failed:", error.message);
-    return null;
-  }
-  return (data as Article) ?? null;
+async function getArticle(slug: string) {
+  return getArticleWithLinks(slug);
 }
 
 function formatDate(dateString: string) {
-  const date = new Date(dateString);
-  return date.toLocaleDateString("fa-IR", {
+  return new Date(dateString).toLocaleDateString("fa-IR", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -51,11 +28,7 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const article = await getArticle(slug);
-
-  if (!article) {
-    return { title: "خبر یافت نشد" };
-  }
-
+  if (!article) return { title: "خبر یافت نشد" };
   const desc = (article.body ?? "").slice(0, 160);
   return {
     title: article.title,
@@ -73,150 +46,87 @@ export default async function NewsArticlePage({ params }: PageProps) {
   const { slug } = await params;
   const article = await getArticle(slug);
 
-  if (!article) {
-    notFound();
-  }
+  if (!article) notFound();
 
-  // بدنه را به پاراگراف‌ها تقسیم می‌کنیم (هر خط یک پاراگراف).
   const paragraphs = (article.body ?? "")
     .split(/\n+/)
     .map((p) => p.trim())
     .filter(Boolean);
 
   return (
-    <article style={{ paddingBlock: "var(--space-10)" }}>
+    <article className="section">
       <div className="container">
-        <div className="article-body">
+        <div className="article">
           {/* Breadcrumb */}
-          <nav
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              marginBottom: "var(--space-6)",
-              fontSize: "var(--text-sm)",
-              color: "var(--color-muted)",
-            }}
-          >
-            <Link href="/" className="btn btn--ghost" style={{ padding: 0 }}>
+          <nav className="article__crumb">
+            <Link href="/" className="article__crumb-back">
+              <Icon name="back" size={16} />
               خانه
             </Link>
-            <span>›</span>
-            <span style={{ color: "var(--color-text-2)" }}>{article.title}</span>
           </nav>
 
           {/* Header */}
-          <header style={{ marginBottom: "var(--space-8)" }}>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                padding: "0.25rem 0.75rem",
-                background: "var(--color-primary-glow)",
-                border: "1px solid rgba(59,130,246,0.2)",
-                borderRadius: "9999px",
-                fontSize: "var(--text-xs)",
-                color: "var(--color-primary)",
-                fontWeight: 600,
-                marginBottom: "var(--space-4)",
-              }}
-            >
-              ✨ پردازش‌شده با هوش مصنوعی
-            </div>
+          <header className="article__header">
+            <span className="badge badge--primary">
+              <Icon name="ai" size={12} />
+              بازنویسی‌شده با هوش مصنوعی
+            </span>
 
-            <h1
-              style={{
-                fontSize: "clamp(1.5rem, 4vw, 2.25rem)",
-                fontWeight: 800,
-                lineHeight: 1.3,
-                marginBottom: "var(--space-4)",
-                color: "var(--color-text)",
-              }}
-            >
-              {article.title}
-            </h1>
+            <h1 className="article__title">{article.title}</h1>
 
-            {/* Meta */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--space-4)",
-                flexWrap: "wrap",
-                marginBottom: "var(--space-5)",
-              }}
-            >
-              <span style={{ fontSize: "var(--text-sm)", color: "var(--color-muted)" }}>
-                🕐 {formatDate(article.created_at)}
+            <div className="article__meta">
+              <span>
+                <Icon name="clock" size={14} />
+                {formatDate(article.created_at)}
               </span>
-              <span style={{ fontSize: "var(--text-sm)", color: "var(--color-muted)" }}>
-                📰 منبع: باما
+              <span>
+                <Icon name="source" size={14} />
+                منبع: باما
               </span>
-              <span style={{ fontSize: "var(--text-sm)", color: "var(--color-muted)" }}>
-                📝 {(article.body ?? "").length} کاراکتر
+              <span>
+                <Icon name="chart" size={14} />
+                {(article.body ?? "").length} کاراکتر
               </span>
             </div>
 
-            {/* Hero Image or placeholder */}
-            <div className="article-hero">
+            {/* Hero Image */}
+            <div className="article__hero">
               {article.image_url ? (
                 <img src={article.image_url} alt={article.title} />
               ) : (
-                <div
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "var(--gradient-hero)",
-                    fontSize: "6rem",
-                    color: "var(--color-muted-2)",
-                  }}
-                >
-                  🚗
+                <div className="article__hero-placeholder">
+                  <Icon name="image" size={56} />
                 </div>
               )}
             </div>
           </header>
 
-          {/* Content */}
-          <div>
+          {/* Body */}
+          <div className="article__content">
             {paragraphs.map((p, i) => (
               <p key={i}>{p}</p>
             ))}
           </div>
 
-          {/* Source Link */}
-          {article.source_url && (
-            <div
-              style={{
-                marginTop: "var(--space-6)",
-                padding: "var(--space-4)",
-                background: "var(--color-surface)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "var(--radius-lg)",
-                fontSize: "var(--text-sm)",
-                color: "var(--color-muted)",
-              }}
-            >
-              منبع اصلی:{" "}
-              <a
-                href={article.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: "var(--color-primary)" }}
-              >
-                {article.source_url}
-              </a>
+          {/* Links: منبع / AI / تلگرام / اینستاگرام */}
+          <div className="article__links">
+            <div className="article__links-label">
+              <IconBox name="link" tone="primary" size={16} />
+              <span>این خبر در پلتفرم‌های دیگر</span>
             </div>
-          )}
+            <NewsLinkPills
+              sourceUrl={article.source_url}
+              aiSlug={article.slug}
+              telegramUrl={article.telegram_url}
+              instagramUrl={article.instagram_url}
+            />
+          </div>
 
-          {/* Back link */}
-          <div style={{ marginTop: "var(--space-8)" }}>
+          {/* Back */}
+          <div className="article__back">
             <Link href="/" className="btn btn--secondary">
-              ← بازگشت به صفحهٔ اصلی
+              <Icon name="back" size={16} />
+              بازگشت به فهرست اخبار
             </Link>
           </div>
         </div>
@@ -224,4 +134,3 @@ export default async function NewsArticlePage({ params }: PageProps) {
     </article>
   );
 }
-

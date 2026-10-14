@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Link from "next/link";
+import { Icon } from "./components/Icons";
 
 export const metadata: Metadata = {
   title: {
@@ -44,7 +45,9 @@ export default function RootLayout({
           <div className="container header__inner">
             {/* Logo */}
             <Link href="/" className="header__logo">
-              <div className="header__logo-icon">🚗</div>
+              <span className="header__logo-icon">
+                <Icon name="sparkle" size={18} />
+              </span>
               <span className="header__logo-text">AutoPulse AI</span>
             </Link>
 
@@ -71,6 +74,7 @@ export default function RootLayout({
               © ۱۴۰۵ · AutoPulse AI · پردازش هوشمند اخبار خودرو
             </p>
             <p className="footer__source">
+              <Icon name="source" size={14} />
               منبع اخبار:
               <a
                 href="https://bama.ir/news"
