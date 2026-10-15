@@ -314,8 +314,8 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
             <div style={{ padding: "var(--space-3)", background: "var(--color-surface-1)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                 <span style={{ fontWeight: 700, fontSize: "13px" }}>🌐 وب‌سایت</span>
-                <span className={`badge badge--${pipelineTestResult.results?.website?.status === "success" ? "success" : "error"}`}>
-                  {pipelineTestResult.results?.website?.status === "success" ? "منتشر شد" : "ناموفق / رد شد"}
+                <span className={`badge badge--${pipelineTestResult.results?.website?.status === "success" ? "success" : "neutral"}`}>
+                  {pipelineTestResult.results?.website?.status === "success" ? "منتشر شد" : "رد شد / نیاز به بررسی"}
                 </span>
               </div>
               <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
@@ -324,7 +324,7 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                     مشاهده خبر در سایت ↗
                   </a>
                 ) : (
-                  pipelineTestResult.results?.website?.error || "بدون خطا"
+                  pipelineTestResult.results?.website?.error || "آدرس دامنه سایت (NEXT_PUBLIC_SITE_URL) تنظیم نشده بود."
                 )}
               </p>
             </div>
@@ -334,16 +334,18 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                 <span style={{ fontWeight: 700, fontSize: "13px" }}>✈️ کانال تلگرام</span>
                 <span className={`badge badge--${pipelineTestResult.results?.telegram?.status === "success" ? "success" : pipelineTestResult.results?.telegram?.status === "skipped" ? "neutral" : "error"}`}>
-                  {pipelineTestResult.results?.telegram?.status === "success" ? "ارسال شد" : pipelineTestResult.results?.telegram?.status === "skipped" ? "رد شد (عدم تنظیم)" : "خطا"}
+                  {pipelineTestResult.results?.telegram?.status === "success" ? "ارسال شد" : pipelineTestResult.results?.telegram?.status === "skipped" ? "رد شد (عدم تنظیم توکن)" : "خطا"}
                 </span>
               </div>
               <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
-                {pipelineTestResult.results?.telegram?.post_url ? (
-                  <a href={pipelineTestResult.results.telegram.post_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
-                    مشاهده پست در تلگرام ↗
-                  </a>
+                {pipelineTestResult.results?.telegram?.status === "success" ? (
+                  pipelineTestResult.results?.telegram?.post_url ? (
+                    <a href={pipelineTestResult.results.telegram.post_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
+                      مشاهده پست در تلگرام ↗
+                    </a>
+                  ) : "ارسال با موفقیت انجام شد."
                 ) : (
-                  pipelineTestResult.results?.telegram?.error || "ارسال تلگرام با موفقیت انجام شد."
+                  pipelineTestResult.results?.telegram?.error || "توکن بات یا آیدی کانال تلگرام در متغیرهای سرور ست نشده است."
                 )}
               </p>
             </div>
@@ -353,14 +355,14 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                 <span style={{ fontWeight: 700, fontSize: "13px" }}>📸 اینستاگرام (Make)</span>
                 <span className={`badge badge--${pipelineTestResult.results?.instagram?.status === "success" ? "success" : pipelineTestResult.results?.instagram?.status === "skipped" ? "neutral" : "error"}`}>
-                  {pipelineTestResult.results?.instagram?.status === "success" ? "ارسال شد" : pipelineTestResult.results?.instagram?.status === "skipped" ? "رد شد (عدم تنظیم)" : "خطا"}
+                  {pipelineTestResult.results?.instagram?.status === "success" ? "ارسال شد" : pipelineTestResult.results?.instagram?.status === "skipped" ? "رد شد (عدم تنظیم وب‌هوک)" : "خطا"}
                 </span>
               </div>
               <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
                 {pipelineTestResult.results?.instagram?.status === "success" ? (
                   "رویداد همراه با عکس ۱۰۸۰×۱۰۸۰ به وب‌هوک Make فرستاده شد."
                 ) : (
-                  pipelineTestResult.results?.instagram?.error || "وضعیت نامشخص"
+                  pipelineTestResult.results?.instagram?.error || "آدرس وب‌هوک Make در کادر مربوطه در پایین وارد نشده است."
                 )}
               </p>
             </div>
