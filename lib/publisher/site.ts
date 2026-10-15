@@ -16,7 +16,9 @@ import { getSupabaseClient, isSupabaseConfigured } from "../supabase";
  * نیازی به درخواست شبکه نیست؛ صرفاً یک علامت‌گذاری در DB + ثبت لینک عمومی.
  */
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/+$/, "");
+const SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL || "https://autopulsenews.netlify.app"
+).replace(/\/+$/, "");
 
 /** آیا انتشار سایت پیکربندی شده (URL سایت تعیین شده)؟ */
 export const isSiteConfigured = Boolean(SITE_URL);

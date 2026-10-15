@@ -40,6 +40,27 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
   const [expandedNewsId, setExpandedNewsId] = useState<string | null>(null);
   const [selectedPlatformTab, setSelectedPlatformTab] = useState<"website" | "telegram" | "instagram">("website");
 
+  // تست فوری انتشار در ۳ پلتفرم
+  const [isRunningTestPipeline, setIsRunningTestPipeline] = useState(false);
+  const [pipelineTestResult, setPipelineTestResult] = useState<any | null>(null);
+
+  const handleRunTestPipeline = async () => {
+    setIsRunningTestPipeline(true);
+    setPipelineTestResult(null);
+    try {
+      const res = await fetch("/api/test-pipeline-run", { method: "POST" });
+      const data = await res.json();
+      setPipelineTestResult(data);
+    } catch {
+      setPipelineTestResult({
+        success: false,
+        error: "خطا در برقراری ارتباط با سرور برای اجرای تست.",
+      });
+    } finally {
+      setIsRunningTestPipeline(false);
+    }
+  };
+
   // تست وب‌هوک Make برای اینستاگرام
   const [testingMakeWebhook, setTestingMakeWebhook] = useState(false);
   const [makeTestResult, setMakeTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -224,8 +245,24 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
           </p>
         </div>
 
-        {/* دکمه ذخیره بالا */}
-        <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center" }}>
+        {/* دکمه‌های عملیاتی بالا */}
+        <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            onClick={handleRunTestPipeline}
+            disabled={isRunningTestPipeline}
+            className="btn btn--outline"
+            style={{
+              padding: "10px 18px",
+              fontSize: "13px",
+              borderColor: "var(--color-primary)",
+              color: "var(--color-primary)",
+            }}
+            title="انتشار فوری یک خبر تستی در سایت، تلگرام و اینستاگرام جهت اطمینان از سلامت پایپ‌لاین"
+          >
+            <Icon name="refresh" size={15} />
+            <span>{isRunningTestPipeline ? "در حال اجرای تست انتشار..." : "🚀 تست فوری انتشار (سایت + تلگرام + اینستا)"}</span>
+          </button>
+
           <button
             onClick={handleSave}
             disabled={isSaving}
@@ -237,6 +274,99 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
           </button>
         </div>
       </div>
+
+      {/* گزارش نتایج تست فوری انتشار */}
+      {pipelineTestResult && (
+        <div
+          className="card animate-fade-in"
+          style={{
+            marginBottom: "var(--space-6)",
+            borderColor: pipelineTestResult.success ? "rgba(34, 197, 94, 0.4)" : "rgba(239, 68, 68, 0.4)",
+            background: "var(--color-surface-2)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-3)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+              <IconBox
+                name={pipelineTestResult.success ? "check" : "alert"}
+                tone={pipelineTestResult.success ? "success" : "accent"}
+                size={18}
+              />
+              <span style={{ fontWeight: 700, fontSize: "15px" }}>گزارش تست سراسری پایپ‌لاین:</span>
+            </div>
+            <button
+              onClick={() => setPipelineTestResult(null)}
+              className="btn btn--outline"
+              style={{ fontSize: "11px", padding: "2px 8px", height: "auto" }}
+            >
+              بستن گزارش
+            </button>
+          </div>
+
+          {pipelineTestResult.news && (
+            <div style={{ fontSize: "13px", color: "var(--color-text-1)", marginBottom: "var(--space-3)", fontWeight: 600 }}>
+              عنوان خبر تست: {pipelineTestResult.news.title}
+            </div>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "var(--space-3)" }}>
+            {/* وب‌سایت */}
+            <div style={{ padding: "var(--space-3)", background: "var(--color-surface-1)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-2)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <span style={{ fontWeight: 700, fontSize: "13px" }}>🌐 وب‌سایت</span>
+                <span className={`badge badge--${pipelineTestResult.results?.website?.status === "success" ? "success" : "error"}`}>
+                  {pipelineTestResult.results?.website?.status === "success" ? "منتشر شد" : "ناموفق / رد شد"}
+                </span>
+              </div>
+              <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
+                {pipelineTestResult.results?.website?.post_url ? (
+                  <a href={pipelineTestResult.results.website.post_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
+                    مشاهده خبر در سایت ↗
+                  </a>
+                ) : (
+                  pipelineTestResult.results?.website?.error || "بدون خطا"
+                )}
+              </p>
+            </div>
+
+            {/* تلگرام */}
+            <div style={{ padding: "var(--space-3)", background: "var(--color-surface-1)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-2)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <span style={{ fontWeight: 700, fontSize: "13px" }}>✈️ کانال تلگرام</span>
+                <span className={`badge badge--${pipelineTestResult.results?.telegram?.status === "success" ? "success" : pipelineTestResult.results?.telegram?.status === "skipped" ? "neutral" : "error"}`}>
+                  {pipelineTestResult.results?.telegram?.status === "success" ? "ارسال شد" : pipelineTestResult.results?.telegram?.status === "skipped" ? "رد شد (عدم تنظیم)" : "خطا"}
+                </span>
+              </div>
+              <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
+                {pipelineTestResult.results?.telegram?.post_url ? (
+                  <a href={pipelineTestResult.results.telegram.post_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
+                    مشاهده پست در تلگرام ↗
+                  </a>
+                ) : (
+                  pipelineTestResult.results?.telegram?.error || "ارسال تلگرام با موفقیت انجام شد."
+                )}
+              </p>
+            </div>
+
+            {/* اینستاگرام */}
+            <div style={{ padding: "var(--space-3)", background: "var(--color-surface-1)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-2)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <span style={{ fontWeight: 700, fontSize: "13px" }}>📸 اینستاگرام (Make)</span>
+                <span className={`badge badge--${pipelineTestResult.results?.instagram?.status === "success" ? "success" : pipelineTestResult.results?.instagram?.status === "skipped" ? "neutral" : "error"}`}>
+                  {pipelineTestResult.results?.instagram?.status === "success" ? "ارسال شد" : pipelineTestResult.results?.instagram?.status === "skipped" ? "رد شد (عدم تنظیم)" : "خطا"}
+                </span>
+              </div>
+              <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
+                {pipelineTestResult.results?.instagram?.status === "success" ? (
+                  "رویداد همراه با عکس ۱۰۸۰×۱۰۸۰ به وب‌هوک Make فرستاده شد."
+                ) : (
+                  pipelineTestResult.results?.instagram?.error || "وضعیت نامشخص"
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* پیام موفقیت یا خطا در ذخیره */}
       {saveSuccess && (
