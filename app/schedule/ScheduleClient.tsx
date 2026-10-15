@@ -38,6 +38,37 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
   const [expandedNewsId, setExpandedNewsId] = useState<string | null>(null);
   const [selectedPlatformTab, setSelectedPlatformTab] = useState<"website" | "telegram" | "instagram">("website");
 
+  // تست وب‌هوک Make برای اینستاگرام
+  const [testingMakeWebhook, setTestingMakeWebhook] = useState(false);
+  const [makeTestResult, setMakeTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const testMakeWebhook = async (url?: string) => {
+    const targetUrl = url || settings.publish_schedule.instagram.webhook_url;
+    if (!targetUrl || !targetUrl.trim()) {
+      setMakeTestResult({ success: false, message: "لطفاً ابتدا آدرس وب‌هوک Make را وارد کنید." });
+      return;
+    }
+    setTestingMakeWebhook(true);
+    setMakeTestResult(null);
+    try {
+      const res = await fetch("/api/test-instagram-webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ webhook_url: targetUrl.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMakeTestResult({ success: true, message: data.message || "رویداد تستی با موفقیت به Make ارسال شد!" });
+      } else {
+        setMakeTestResult({ success: false, message: data.error || "خطا در فراخوانی وب‌هوک Make." });
+      }
+    } catch {
+      setMakeTestResult({ success: false, message: "خطا در اتصال به سرور تست." });
+    } finally {
+      setTestingMakeWebhook(false);
+    }
+  };
+
   // دریافت وضعیت اولیه هوش مصنوعی
   useEffect(() => {
     fetchAiStatus(false);
@@ -482,6 +513,151 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                     </div>
                   </label>
                 </div>
+
+                {/* بخش اختصاصی تنظیمات پیشرفته اینستاگرام و Make */}
+                {p.key === "instagram" && (
+                  <div
+                    style={{
+                      marginTop: "var(--space-2)",
+                      padding: "var(--space-3)",
+                      background: "var(--color-surface-2)",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--color-border-2)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "var(--space-3)",
+                    }}
+                  >
+                    {/* آدرس وب‌هوک Make */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-1)" }}>
+                          🔗 آدرس وب‌هوک Make.com (Instagram):
+                        </span>
+                        <span style={{ fontSize: "11px", color: "var(--color-primary)" }}>بدون کدنویسی</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                        <input
+                          type="url"
+                          dir="ltr"
+                          placeholder="https://hook.eu1.make.com/xxxxxxxxxxxxxxxx"
+                          value={config.webhook_url || ""}
+                          onChange={(e) => updatePlatformConfig("instagram", { webhook_url: e.target.value })}
+                          className="input"
+                          style={{ flex: 1, padding: "6px 10px", fontSize: "12px", fontFamily: "monospace" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => testMakeWebhook()}
+                          disabled={testingMakeWebhook || !config.webhook_url}
+                          className="btn btn--outline"
+                          style={{ fontSize: "11px", padding: "6px 12px", whiteSpace: "nowrap" }}
+                        >
+                          {testingMakeWebhook ? "در حال ارسال..." : "تست وب‌هوک"}
+                        </button>
+                      </div>
+
+                      {makeTestResult && (
+                        <div
+                          style={{
+                            marginTop: "6px",
+                            fontSize: "11px",
+                            padding: "6px 10px",
+                            borderRadius: "var(--radius-sm)",
+                            background: makeTestResult.success ? "rgba(34, 197, 94, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                            color: makeTestResult.success ? "#22c55e" : "#ef4444",
+                            border: `1px solid ${makeTestResult.success ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)"}`,
+                          }}
+                        >
+                          {makeTestResult.message}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ابعاد تصویر برای اینستاگرام */}
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px", color: "var(--color-text-1)" }}>
+                        📐 سایز عکس اختصاصی اینستاگرام:
+                      </div>
+                      <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                        <label
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "var(--space-2)",
+                            padding: "6px 8px",
+                            borderRadius: "var(--radius-sm)",
+                            border: "1px solid",
+                            borderColor: config.aspect_ratio !== "portrait" ? "var(--color-primary)" : "var(--color-border-2)",
+                            background: config.aspect_ratio !== "portrait" ? "var(--color-surface-3)" : "transparent",
+                            cursor: "pointer",
+                            fontSize: "12px",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="ig-ratio"
+                            checked={config.aspect_ratio !== "portrait"}
+                            onChange={() => updatePlatformConfig("instagram", { aspect_ratio: "square" })}
+                          />
+                          <div>
+                            <div style={{ fontWeight: 600 }}>مربع ۱:۱ (۱۰۸۰×۱۰۸۰)</div>
+                            <div style={{ fontSize: "10px", color: "var(--color-text-2)" }}>استاندارد فید و گرید پیج</div>
+                          </div>
+                        </label>
+
+                        <label
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "var(--space-2)",
+                            padding: "6px 8px",
+                            borderRadius: "var(--radius-sm)",
+                            border: "1px solid",
+                            borderColor: config.aspect_ratio === "portrait" ? "var(--color-primary)" : "var(--color-border-2)",
+                            background: config.aspect_ratio === "portrait" ? "var(--color-surface-3)" : "transparent",
+                            cursor: "pointer",
+                            fontSize: "12px",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="ig-ratio"
+                            checked={config.aspect_ratio === "portrait"}
+                            onChange={() => updatePlatformConfig("instagram", { aspect_ratio: "portrait" })}
+                          />
+                          <div>
+                            <div style={{ fontWeight: 600 }}>عمودی ۴:۵ (۱۰۸۰×۱۳۵۰)</div>
+                            <div style={{ fontSize: "10px", color: "var(--color-text-2)" }}>پوشش تمام‌صفحه اکسپلور</div>
+                          </div>
+                        </label>
+                      </div>
+                      <div style={{ fontSize: "11px", color: "var(--color-text-2)", marginTop: "6px", lineHeight: 1.4 }}>
+                        ✓ سیستم قبل از انتشار، عکس خودرو را به ابعاد انتخابی با حاشیه بلور شکیل و باکیفیت تبدیل کرده و در فضای ذخیره‌سازی ابری با لینک مستقیم HTTPS آپلود می‌کند.
+                      </div>
+                    </div>
+
+                    {/* مشخصات کپشن استاندارد */}
+                    <div
+                      style={{
+                        padding: "8px",
+                        borderRadius: "var(--radius-sm)",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        border: "1px dashed var(--color-border-2)",
+                        fontSize: "11px",
+                        color: "var(--color-text-2)",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <span style={{ fontWeight: 600, color: "var(--color-text-1)" }}>📝 مشخصات کپشن اینستاگرام:</span>
+                      <div style={{ marginTop: "2px" }}>
+                        متن کوتاه (۴۰ تا ۶۰ کلمه) · هوک جذاب با ایموجی · ۲ نکته کلیدی خودرو · دعوت به تعامل و کامنت · ۳ تا ۵ هشتگ پربازدید خودرویی.
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

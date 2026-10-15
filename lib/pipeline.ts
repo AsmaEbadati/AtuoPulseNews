@@ -348,7 +348,7 @@ export async function publishReadyArticles(limit = 5): Promise<PublishReadyResul
   const { data: ready, error: selErr } = await db
     .from("news_items")
     .select(
-      "id, slug, title, rewritten_text, tg_caption, ig_caption, image_url, source_image_url"
+      "id, slug, title, rewritten_text, tg_caption, ig_caption, image_url, source_image_url, source_url"
     )
     .eq("process_status", "ready")
     .order("created_at", { ascending: true })
@@ -420,6 +420,7 @@ export async function publishReadyArticles(limit = 5): Promise<PublishReadyResul
         ig_caption: item.ig_caption,
         image_url: item.image_url,
         source_image_url: item.source_image_url,
+        source_url: item.source_url,
       });
       if (ig.status === "success") igSuccess++;
       else if (ig.status === "skipped") igSkipped++;

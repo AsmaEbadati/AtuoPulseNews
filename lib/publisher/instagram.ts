@@ -1,33 +1,42 @@
 import { getSupabaseClient, isSupabaseConfigured } from "../supabase";
+import { getAppSettings } from "../settings";
+import { prepareInstagramImage, validateInstagramImage, type InstagramImageRatio } from "../instagram-image";
 
 /**
- * فاز ۴ج — انتشار در اینستاگرام با Instagram Graph API (مستقیم، بدون Make).
+ * ماژول انتشار در اینستاگرام با دو شیوه:
+ *   ۱) Make.com Webhook (توصیه‌شده، بدون نیاز به درگیر شدن با تایید اپ‌های متا)
+ *   ۲) Instagram Graph API مستقیم (با توکن و Account ID)
  *
- * جریان دو مرحله‌ای Content Publishing API:
- *   1) POST /{ig-user-id}/media?image_url=...&caption=...  → creation_id
- *   2) POST /{ig-user-id}/media_publish?creation_id=...    → media_id
- *   3) GET  /{media_id}?fields=permalink                   → permalink (best-effort)
- *
- * idempotency: ابتدا claim_publication(news_id, 'instagram')؛ اگر قبلاً success
- * شده باشد رد می‌شود.
- *
- * env لازم: INSTAGRAM_ACCESS_TOKEN و INSTAGRAM_ACCOUNT_ID
- * (اکانت Business/Creator متصل به صفحهٔ فیسبوک، مجوز instagram_content_publish).
+ * قبل از انتشار، تصویر به صورت استاندارد ۱۰۸۰×۱۰۸۰ (یا ۱۰۸۰×۱۳۵۰)
+ * با حاشیه بلور شکیل آماده و در Supabase Storage آپلود می‌شود.
  */
 
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
-export const isInstagramConfigured = Boolean(
+export const isGraphApiConfigured = Boolean(
   process.env.INSTAGRAM_ACCESS_TOKEN && process.env.INSTAGRAM_ACCOUNT_ID
 );
 
-function requireConfig() {
-  const token = process.env.INSTAGRAM_ACCESS_TOKEN;
-  const accountId = process.env.INSTAGRAM_ACCOUNT_ID;
-  if (!token) throw new Error("INSTAGRAM_ACCESS_TOKEN is not configured.");
-  if (!accountId) throw new Error("INSTAGRAM_ACCOUNT_ID is not configured.");
-  return { token, accountId };
+export const isMakeWebhookConfigured = Boolean(
+  process.env.MAKE_INSTAGRAM_WEBHOOK_URL || process.env.INSTAGRAM_WEBHOOK_URL
+);
+
+export interface PublishResult {
+  news_id: string;
+  destination: "instagram";
+  status: "success" | "skipped" | "error";
+  post_url?: string;
+  error?: string;
+}
+
+export interface InstagramNews {
+  id: string;
+  title: string;
+  ig_caption: string | null;
+  image_url: string | null;
+  source_image_url: string | null;
+  source_url?: string | null;
 }
 
 async function claimPublication(newsId: string): Promise<boolean> {
@@ -57,25 +66,8 @@ async function completePublication(
   if (error) throw new Error(`complete_publication failed: ${error.message}`);
 }
 
-export interface PublishResult {
-  news_id: string;
-  destination: "instagram";
-  status: "success" | "skipped" | "error";
-  post_url?: string;
-  error?: string;
-}
-
-export interface InstagramNews {
-  id: string;
-  title: string;
-  ig_caption: string | null;
-  image_url: string | null;
-  source_image_url: string | null;
-}
-
-/** فراخوانی POST به Graph API و بررسی خطا. */
-async function graphPost(path: string, params: Record<string, string>): Promise<any> {
-  const { token } = requireConfig();
+/** فراخوانی POST به Graph API */
+async function graphPost(path: string, params: Record<string, string>, token: string): Promise<any> {
   const url = new URL(`${GRAPH_BASE}/${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   url.searchParams.set("access_token", token);
@@ -92,61 +84,100 @@ async function graphPost(path: string, params: Record<string, string>): Promise<
   return json;
 }
 
-async function graphGet(path: string, params: Record<string, string>): Promise<any> {
-  const { token } = requireConfig();
-  const url = new URL(`${GRAPH_BASE}/${path}`);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  url.searchParams.set("access_token", token);
-
-  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(30000) });
-  const json = (await res.json()) as any;
-  if (!res.ok || json.error) {
-    const msg = json?.error?.message ?? `HTTP ${res.status}`;
-    throw new Error(`Instagram ${path} failed: ${msg}`);
+/** ارسال خبر به وب‌هوک Make.com */
+export async function sendToMakeWebhook(
+  webhookUrl: string,
+  payload: {
+    news_id: string;
+    title: string;
+    caption: string;
+    image_url: string;
+    source_url?: string;
+    aspect_ratio: string;
+    width: number;
+    height: number;
+    timestamp: string;
   }
-  return json;
-}
-
-/** گرفتن permalink یک مدیای منتشرشده (best-effort). */
-async function getPermalink(mediaId: string): Promise<string | null> {
+): Promise<{ success: boolean; responseText?: string; error?: string }> {
   try {
-    const json = await graphGet(mediaId, { fields: "permalink" });
-    return (json.permalink as string) ?? null;
-  } catch {
-    return null;
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "AutoPulse-Make-Publisher/1.0",
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    const responseText = await res.text().catch(() => "");
+    if (!res.ok) {
+      return {
+        success: false,
+        error: `Make webhook responded with HTTP ${res.status}: ${responseText}`,
+      };
+    }
+
+    return { success: true, responseText };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Make webhook error: ${msg}` };
   }
 }
 
 /**
- * انتشار یک خبر در اینستاگرام (Graph API مستقیم).
- * - اگر توکن/اکانت تنظیم نشده ⇒ skipped.
- * - اگر تصویر نباشد یا HTTPS نباشد ⇒ error.
- * - اگر قبلاً success شده ⇒ skipped (idempotent).
+ * انتشار خبر در اینستاگرام (اتوماتیک از طریق Make.com یا Graph API)
  */
 export async function publishToInstagram(news: InstagramNews): Promise<PublishResult> {
-  if (!isInstagramConfigured || !isSupabaseConfigured) {
+  if (!isSupabaseConfigured) {
     return { news_id: news.id, destination: "instagram", status: "skipped" };
   }
 
-  const photo = news.image_url || news.source_image_url || null;
-  if (!photo) {
+  // دریافت تنظیمات ذخیره‌شده
+  const settings = await getAppSettings();
+  const igConfig = settings.publish_schedule.instagram;
+  const webhookUrl =
+    igConfig.webhook_url?.trim() ||
+    process.env.MAKE_INSTAGRAM_WEBHOOK_URL?.trim() ||
+    process.env.INSTAGRAM_WEBHOOK_URL?.trim() ||
+    "";
+  const ratio: InstagramImageRatio = igConfig.aspect_ratio === "portrait" ? "portrait" : "square";
+
+  const hasMake = Boolean(webhookUrl);
+  const hasGraph = isGraphApiConfigured;
+
+  if (!hasMake && !hasGraph) {
+    console.log(`[instagram] Skipped: neither Make Webhook nor Graph API is configured.`);
     return {
       news_id: news.id,
       destination: "instagram",
-      status: "error",
-      error: "Instagram requires an image; none available.",
-    };
-  }
-  if (!photo.startsWith("https://")) {
-    return {
-      news_id: news.id,
-      destination: "instagram",
-      status: "error",
-      error: `Image URL must be public HTTPS: ${photo}`,
+      status: "skipped",
+      error: "تنظیمات وب‌هوک Make یا کلیدهای اینستاگرام وارد نشده است.",
     };
   }
 
-  // 1) claim (idempotency)
+  // ۱) بررسی و آماده‌سازی عکس استاندارد اینستاگرام
+  const rawPhoto = news.image_url || news.source_image_url || null;
+  if (!rawPhoto) {
+    return {
+      news_id: news.id,
+      destination: "instagram",
+      status: "error",
+      error: "خبر فاقد تصویر است و امکان انتشار در اینستاگرام وجود ندارد.",
+    };
+  }
+
+  console.log(`[instagram] 🖼️ Preparing ${ratio} image for news ${news.id}...`);
+  const prepared = await prepareInstagramImage(rawPhoto, news.id, ratio);
+  const finalImageUrl = prepared.finalUrl;
+
+  // اعتبارسنجی تصویر خروجی
+  const validation = await validateInstagramImage(finalImageUrl);
+  if (!validation.valid && !validation.isInstagramCompliant) {
+    console.warn(`[instagram] Image validation warning: ${validation.error}`);
+  }
+
+  // ۲) ثبت claim در دیتابیس برای جلوگیری از ارسال تکراری (Idempotency)
   let claimed = false;
   try {
     claimed = await claimPublication(news.id);
@@ -158,43 +189,76 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
     return { news_id: news.id, destination: "instagram", status: "skipped" };
   }
 
-  // 2) ساخت container و publish
   const caption = (news.ig_caption && news.ig_caption.trim()) || news.title;
-  const { accountId } = requireConfig();
 
-  try {
-    // 2a) ساخت container
-    const container = await graphPost(`${accountId}/media`, {
-      image_url: photo,
+  // ۳) سناریو اول: ارسال از طریق وب‌هوک Make.com (در اولویت)
+  if (hasMake) {
+    console.log(`[instagram] 🚀 Sending to Make.com webhook: ${webhookUrl}`);
+    const makeRes = await sendToMakeWebhook(webhookUrl, {
+      news_id: news.id,
+      title: news.title,
       caption,
+      image_url: finalImageUrl,
+      source_url: news.source_url ?? undefined,
+      aspect_ratio: ratio === "portrait" ? "4:5" : "1:1",
+      width: prepared.width,
+      height: prepared.height,
+      timestamp: new Date().toISOString(),
     });
+
+    if (makeRes.success) {
+      await completePublication(news.id, "success", webhookUrl, null);
+      console.log(`[instagram] ✅ Published via Make.com webhook for "${news.title}"`);
+      return {
+        news_id: news.id,
+        destination: "instagram",
+        status: "success",
+        post_url: webhookUrl,
+      };
+    } else {
+      await completePublication(news.id, "error", null, makeRes.error ?? "Make error").catch(() => {});
+      console.warn(`[instagram] ❌ Make webhook failed for "${news.title}": ${makeRes.error}`);
+      return {
+        news_id: news.id,
+        destination: "instagram",
+        status: "error",
+        error: makeRes.error,
+      };
+    }
+  }
+
+  // ۴) سناریو دوم: ارسال از طریق Graph API مستقیم
+  try {
+    const token = process.env.INSTAGRAM_ACCESS_TOKEN!;
+    const accountId = process.env.INSTAGRAM_ACCOUNT_ID!;
+
+    const container = await graphPost(
+      `${accountId}/media`,
+      { image_url: finalImageUrl, caption },
+      token
+    );
     const creationId = container.id as string;
     if (!creationId) throw new Error("Graph API did not return a creation id.");
 
-    // 2b) publish container
-    const published = await graphPost(`${accountId}/media_publish`, {
-      creation_id: creationId,
-    });
+    const published = await graphPost(
+      `${accountId}/media_publish`,
+      { creation_id: creationId },
+      token
+    );
     const mediaId = published.id as string;
 
-    // 2c) permalink (best-effort)
-    const postUrl = mediaId ? await getPermalink(mediaId) : null;
-
-    await completePublication(news.id, "success", postUrl, null);
-    console.log(
-      `[instagram] ✅ published "${news.title}" (media ${mediaId})${postUrl ? ` → ${postUrl}` : ""}`
-    );
+    await completePublication(news.id, "success", mediaId, null);
+    console.log(`[instagram] ✅ Published via Graph API for "${news.title}" (media ${mediaId})`);
     return {
       news_id: news.id,
       destination: "instagram",
       status: "success",
-      post_url: postUrl ?? undefined,
+      post_url: `https://instagram.com/p/${mediaId}`,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await completePublication(news.id, "error", null, msg).catch(() => {});
-    console.warn(`[instagram] ❌ failed "${news.title}": ${msg}`);
+    console.warn(`[instagram] ❌ Graph API failed for "${news.title}": ${msg}`);
     return { news_id: news.id, destination: "instagram", status: "error", error: msg };
   }
 }
-

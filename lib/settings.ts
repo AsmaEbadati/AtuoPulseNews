@@ -5,6 +5,8 @@ export interface PlatformScheduleConfig {
   enabled: boolean;
   mode: "instant" | "scheduled"; // instant: به محض انتشار در باما | scheduled: ساعت مشخص
   time: string; // e.g. "10:00"
+  webhook_url?: string; // آدرس وب‌هوک (مانند Make.com Webhook)
+  aspect_ratio?: "square" | "portrait"; // ابعاد عکس اختصاصی (مربع ۱:۱ یا عمودی ۴:۵)
 }
 
 export interface AppPublishSettings {
@@ -40,6 +42,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
       enabled: true,
       mode: "scheduled",
       time: "18:00",
+      webhook_url: "",
+      aspect_ratio: "square",
     },
   },
   ai_settings: {
