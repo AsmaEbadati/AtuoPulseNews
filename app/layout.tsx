@@ -56,6 +56,9 @@ export default function RootLayout({
               <Link href="/" className="header__nav-link">
                 اخبار
               </Link>
+              <Link href="/schedule" className="header__nav-link">
+                زمانبندی
+              </Link>
               <Link href="/dashboard" className="header__nav-link">
                 داشبورد
               </Link>

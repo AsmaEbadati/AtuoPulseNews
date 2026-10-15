@@ -23,12 +23,12 @@ interface StatusRow {
   title: string;
   process_status: string;
   created_at: string;
+  updated_at: string;
   destination: string;
   status: string;
   post_url: string | null;
   error_message: string | null;
   attempts: number;
-  updated_at: string;
 }
 
 async function getRuns(): Promise<RunRow[]> {
@@ -95,6 +95,17 @@ export default async function DashboardPage() {
     { icon: "instagram", tone: "neutral", label: "اینستاگرام", value: stats.instagram },
   ];
 
+  // جمع وضعیت‌ها برای گزارش انتشار
+  const siteSuccesses   = statuses.filter(s => s.destination === "site"      && s.status === "success");
+  const tgSuccesses     = statuses.filter(s => s.destination === "telegram"  && s.status === "success");
+  const igSuccesses     = statuses.filter(s => s.destination === "instagram" && s.status === "success");
+  const siteErrors      = statuses.filter(s => s.destination === "site"      && s.status === "error");
+  const tgErrors        = statuses.filter(s => s.destination === "telegram"  && s.status === "error");
+  const igErrors        = statuses.filter(s => s.destination === "instagram" && s.status === "error");
+  const lastSite        = siteSuccesses[0];
+  const lastTg          = tgSuccesses[0];
+  const lastIg          = igSuccesses[0];
+
   const systemItems = [
     { label: "وضعیت", value: hasError ? "خطا در آخرین اجرا" : lastRun ? "فعال" : "بدون اجرا", ok: !hasError && Boolean(lastRun) },
     { label: "آخرین اجرا", value: lastRun ? formatDate(lastRun.started_at) : "—", ok: Boolean(lastRun) },
@@ -117,7 +128,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="stat-grid">
+        <div className="stat-grid stat-grid--4">
           {statCards.map((s) => (
             <div key={s.label} className="stat-card">
               <IconBox name={s.icon} tone={s.tone} size={20} />
@@ -127,6 +138,64 @@ export default async function DashboardPage() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Publish Report — 3 Platforms */}
+        <div className="pub-report-grid">
+          {/* Site */}
+          <div className="pub-report-card">
+            <div className="pub-report-card__head">
+              <div className="pub-report-card__title">
+                <IconBox name="grid" tone="success" size={18} />
+                سایت
+              </div>
+              <span className="badge badge--error">{siteErrors.length} خطا</span>
+            </div>
+            <div className="pub-report-card__count pub-report-card__count--success">{siteSuccesses.length}</div>
+            <div className="pub-report-card__meta">آخرین انتشار: {lastSite ? formatDate(lastSite.updated_at) : "—"}</div>
+            {lastSite?.post_url && (
+              <a href={lastSite.post_url} target="_blank" rel="noopener noreferrer" className="pub-report-card__link">
+                <Icon name="external" size={11} />
+                مشاهده آخرین پست
+              </a>
+            )}
+          </div>
+          {/* Telegram */}
+          <div className="pub-report-card">
+            <div className="pub-report-card__head">
+              <div className="pub-report-card__title">
+                <IconBox name="telegram" tone="primary" size={18} />
+                تلگرام
+              </div>
+              <span className="badge badge--error">{tgErrors.length} خطا</span>
+            </div>
+            <div className="pub-report-card__count pub-report-card__count--primary">{tgSuccesses.length}</div>
+            <div className="pub-report-card__meta">آخرین انتشار: {lastTg ? formatDate(lastTg.updated_at) : "—"}</div>
+            {lastTg?.post_url && (
+              <a href={lastTg.post_url} target="_blank" rel="noopener noreferrer" className="pub-report-card__link">
+                <Icon name="external" size={11} />
+                مشاهده آخرین پست
+              </a>
+            )}
+          </div>
+          {/* Instagram */}
+          <div className="pub-report-card">
+            <div className="pub-report-card__head">
+              <div className="pub-report-card__title">
+                <IconBox name="instagram" tone="accent" size={18} />
+                اینستاگرام
+              </div>
+              <span className="badge badge--error">{igErrors.length} خطا</span>
+            </div>
+            <div className="pub-report-card__count pub-report-card__count--success">{igSuccesses.length}</div>
+            <div className="pub-report-card__meta">آخرین انتشار: {lastIg ? formatDate(lastIg.updated_at) : "—"}</div>
+            {lastIg?.post_url && (
+              <a href={lastIg.post_url} target="_blank" rel="noopener noreferrer" className="pub-report-card__link">
+                <Icon name="external" size={11} />
+                مشاهده آخرین پست
+              </a>
+            )}
+          </div>
         </div>
 
         {/* System Status */}
