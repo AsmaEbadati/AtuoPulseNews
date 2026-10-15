@@ -5,8 +5,8 @@ import { Icon } from "./components/Icons";
 
 export const metadata: Metadata = {
   title: {
-    template: "%s | AutoPulse AI",
-    default: "AutoPulse AI — پایپ‌لاین هوشمند اخبار خودرویی",
+    template: "%s | AutoPulse",
+    default: "AutoPulse — پایپ‌لاین هوشمند اخبار خودرویی",
   },
   description:
     "سیستم خودکار پایش، پردازش با هوش مصنوعی و انتشار اخبار خودرو باما در سایت، تلگرام و اینستاگرام",
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "fa_IR",
-    siteName: "AutoPulse AI",
+    siteName: "AutoPulse",
   },
 };
 
@@ -48,7 +48,7 @@ export default function RootLayout({
               <span className="header__logo-icon">
                 <Icon name="sparkle" size={18} />
               </span>
-              <span className="header__logo-text">AutoPulse AI</span>
+              <span className="header__logo-text">AutoPulse</span>
             </Link>
 
             {/* Navigation */}
@@ -57,7 +57,7 @@ export default function RootLayout({
                 اخبار
               </Link>
               <Link href="/schedule" className="header__nav-link">
-                زمانبندی
+                زمانبندی و انتشار
               </Link>
               <Link href="/dashboard" className="header__nav-link">
                 داشبورد
@@ -74,7 +74,7 @@ export default function RootLayout({
         <footer className="footer">
           <div className="container footer__inner">
             <p className="footer__copy">
-              © ۱۴۰۵ · AutoPulse AI · پردازش هوشمند اخبار خودرو
+              © ۱۴۰۵ · AutoPulse · پردازش و انتشار هوشمند اخبار خودرو
             </p>
             <p className="footer__source">
               <Icon name="source" size={14} />

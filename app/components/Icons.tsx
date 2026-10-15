@@ -23,7 +23,10 @@ export type IconName =
   | "back"
   | "image"
   | "sparkle"
-  | "link";
+  | "link"
+  | "globe"
+  | "refresh"
+  | "search";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   // globe + خطوط — «منبع اصلی»
@@ -135,6 +138,28 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M10.5 13.5a4 4 0 005.7 0l2.3-2.3a4 4 0 10-5.7-5.7L11.5 6.7" />
       <path d="M13.5 10.5a4 4 0 00-5.7 0l-2.3 2.3a4 4 0 105.7 5.7l1.3-1.2" />
+    </>
+  ),
+  // کره زمین
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18" />
+    </>
+  ),
+  // رفرش / به‌روزرسانی
+  refresh: (
+    <>
+      <path d="M20 11A8.1 8.1 0 004.5 9M4 5v4h4" />
+      <path d="M4 13a8.1 8.1 0 0015.5 2m.5 4v-4h-4" />
+    </>
+  ),
+  // جست‌وجو / بازرسی
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.35-4.35" />
     </>
   ),
 };

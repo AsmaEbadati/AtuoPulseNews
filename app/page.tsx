@@ -33,7 +33,7 @@ export default async function HomePage() {
         <div className="container">
           <div className="hero__eyebrow">
             <Icon name="sparkle" size={14} />
-            <span>پایپ‌لاین هوشمند خبر خودرو</span>
+            <span>سامانه هوشمند خبر خودرو AutoPulse</span>
           </div>
 
           <h1 className="hero__title">

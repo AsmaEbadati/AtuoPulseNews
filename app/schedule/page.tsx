@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { getPublicClient } from "@/lib/supabase-public";
+import { getAppSettings } from "@/lib/settings";
 import ScheduleClient from "./ScheduleClient";
 
 export const metadata: Metadata = {
-  title: "کنترل انتشار — زمانبندی و ویرایش",
-  description: "زمانبندی انتشار اخبار در سایت، تلگرام و اینستاگرام و ویرایش محتوای هوش مصنوعی",
+  title: "تنظیمات زمانبندی انتشار و هوش مصنوعی",
+  description: "تنظیم سراسری زمانبندی انتشار اخبار در سایت، تلگرام و اینستاگرام و انتخاب لحن بازنویسی هوش مصنوعی",
 };
 
-export const revalidate = 60; // هر ۶۰ ثانیه داده‌های تازه
+export const revalidate = 0; // بدون کش، دریافت آنی تنظیمات
 
 export interface ScheduleItem {
   id: string;
@@ -43,21 +44,29 @@ async function getScheduleItems(): Promise<ScheduleItem[]> {
   const db = getPublicClient();
   if (!db) return [];
 
-  const { data, error } = await db
-    .from("public_schedule")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  try {
+    const { data, error } = await db
+      .from("public_schedule")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(30);
 
-  if (error) {
-    console.error("[schedule] public_schedule fetch failed:", error.message);
+    if (error) {
+      console.warn("[schedule] public_schedule fetch failed:", error.message);
+      return [];
+    }
+    return (data ?? []) as ScheduleItem[];
+  } catch (err) {
+    console.warn("[schedule] Fetch error:", err);
     return [];
   }
-
-  return (data ?? []) as ScheduleItem[];
 }
 
 export default async function SchedulePage() {
-  const items = await getScheduleItems();
-  return <ScheduleClient items={items} />;
+  const [settings, items] = await Promise.all([
+    getAppSettings(),
+    getScheduleItems(),
+  ]);
+
+  return <ScheduleClient initialSettings={settings} items={items} />;
 }

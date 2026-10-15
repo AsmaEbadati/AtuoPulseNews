@@ -4,7 +4,7 @@ import { Icon, IconBox, type IconName } from "../components/Icons";
 
 export const metadata: Metadata = {
   title: "داشبورد — وضعیت پایپ‌لاین",
-  description: "لاگ اجراهای پایپ‌لاین AutoPulse AI و وضعیت انتشار اخبار",
+  description: "لاگ اجراهای پایپ‌لاین AutoPulse و وضعیت انتشار اخبار",
 };
 
 interface RunRow {
@@ -113,6 +113,20 @@ export default async function DashboardPage() {
     { label: "خطاهای آخرین اجرا", value: lastRun ? String(lastRun.error_count) : "—", ok: !hasError },
   ];
 
+  const hasQuotaError =
+    statuses.some(
+      (s) =>
+        s.error_message &&
+        (s.error_message.includes("AI_QUOTA_EXCEEDED") ||
+          /quota|credit|insufficient|429/i.test(s.error_message))
+    ) ||
+    runs.some(
+      (r) =>
+        r.note &&
+        (r.note.includes("AI_QUOTA_EXCEEDED") ||
+          /quota|credit|insufficient|429/i.test(r.note))
+    );
+
   return (
     <div className="section">
       <div className="container">
@@ -126,6 +140,36 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Quota Error Banner */}
+        {hasQuotaError && (
+          <div
+            className="alert alert--error"
+            style={{
+              marginBottom: "var(--space-6)",
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-3)",
+            }}
+          >
+            <IconBox name="alert" tone="accent" size={20} />
+            <div style={{ flex: 1 }}>
+              <strong style={{ fontSize: "14px" }}>
+                ⚠️ اخطار اتمام سهمیه / توکن هوش مصنوعی
+              </strong>
+              <p style={{ margin: "3px 0 0", fontSize: "13px", opacity: 0.9 }}>
+                سهمیه یا اعتبار کلید API هوش مصنوعی به پایان رسیده است و پردازش خبرهای جدید ناموفق بوده است. لطفاً منتظر شارژ سهمیه بمانید یا در بخش{" "}
+                <a
+                  href="/schedule"
+                  style={{ textDecoration: "underline", fontWeight: 700, color: "inherit" }}
+                >
+                  تنظیمات زمان‌بندی و انتشار
+                </a>{" "}
+                وضعیت را بررسی کنید.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="stat-grid stat-grid--4">

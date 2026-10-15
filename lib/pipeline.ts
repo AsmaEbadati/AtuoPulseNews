@@ -7,6 +7,7 @@ import { generateContent, isAIConfigured } from "./ai";
 import { publishToTelegram } from "./publisher/telegram";
 import { publishToSite } from "./publisher/site";
 import { publishToInstagram } from "./publisher/instagram";
+import { getAppSettings } from "./settings";
 import type {
   ArticleProcessResult,
   PipelineRunDetails,
@@ -238,6 +239,9 @@ export async function processPendingArticles(limit = 3): Promise<ProcessPendingR
 
   if (selErr) throw new Error(`processPendingArticles select failed: ${selErr.message}`);
 
+  const settings = await getAppSettings();
+  const currentTone = settings.ai_settings.tone;
+
   const results: ProcessPendingResult["results"] = [];
   let succeeded = 0;
   let failed = 0;
@@ -259,14 +263,17 @@ export async function processPendingArticles(limit = 3): Promise<ProcessPendingR
           ? article.body.slice(0, 6000)
           : item.title;
 
-      // 3) تولید محتوا با AI
-      const content = await generateContent({
-        title: article?.title || item.title,
-        source_url: item.source_url,
-        image_url: article?.image_url ?? item.source_image_url ?? null,
-        excerpt,
-        published_date: null,
-      });
+      // 3) تولید محتوا با AI طبق لحن انتخابی
+      const content = await generateContent(
+        {
+          title: article?.title || item.title,
+          source_url: item.source_url,
+          image_url: article?.image_url ?? item.source_image_url ?? null,
+          excerpt,
+          published_date: null,
+        },
+        currentTone
+      );
 
       // 4) ذخیرهٔ خروجی AI
       const { error: updErr } = await db
@@ -349,6 +356,9 @@ export async function publishReadyArticles(limit = 5): Promise<PublishReadyResul
 
   if (selErr) throw new Error(`publishReadyArticles select failed: ${selErr.message}`);
 
+  const settings = await getAppSettings();
+  const schedule = settings.publish_schedule;
+
   const results: PublishReadyResult["results"] = [];
   let siteSuccess = 0,
     siteSkipped = 0,
@@ -361,42 +371,60 @@ export async function publishReadyArticles(limit = 5): Promise<PublishReadyResul
     igError = 0;
 
   for (const item of ready ?? []) {
-    // 1) انتشار در سایت (اول سایت، چون پایدارترین و سریع‌ترین مقصد است)
-    const site = await publishToSite({
-      id: item.id,
-      title: item.title,
-      slug: item.slug,
-      rewritten_text: item.rewritten_text,
-    });
-    if (site.status === "success") siteSuccess++;
-    else if (site.status === "skipped") siteSkipped++;
-    else siteError++;
+    // 1) انتشار در سایت
+    let site: { status: "success" | "skipped" | "error"; post_url?: string; error?: string };
+    if (!schedule.website.enabled) {
+      site = { status: "skipped", error: "سایت در تنظیمات زمان‌بندی غیرفعال است" };
+      siteSkipped++;
+    } else {
+      site = await publishToSite({
+        id: item.id,
+        title: item.title,
+        slug: item.slug,
+        rewritten_text: item.rewritten_text,
+      });
+      if (site.status === "success") siteSuccess++;
+      else if (site.status === "skipped") siteSkipped++;
+      else siteError++;
+    }
     console.log(`[pipeline:publish] ${item.title} → site:${site.status}`);
 
     // 2) انتشار در تلگرام
-    const tg = await publishToTelegram({
-      id: item.id,
-      title: item.title,
-      tg_caption: item.tg_caption,
-      image_url: item.image_url,
-      source_image_url: item.source_image_url,
-    });
-    if (tg.status === "success") tgSuccess++;
-    else if (tg.status === "skipped") tgSkipped++;
-    else tgError++;
+    let tg: { status: "success" | "skipped" | "error"; post_url?: string; error?: string };
+    if (!schedule.telegram.enabled) {
+      tg = { status: "skipped", error: "تلگرام در تنظیمات زمان‌بندی غیرفعال است" };
+      tgSkipped++;
+    } else {
+      tg = await publishToTelegram({
+        id: item.id,
+        title: item.title,
+        tg_caption: item.tg_caption,
+        image_url: item.image_url,
+        source_image_url: item.source_image_url,
+      });
+      if (tg.status === "success") tgSuccess++;
+      else if (tg.status === "skipped") tgSkipped++;
+      else tgError++;
+    }
     console.log(`[pipeline:publish] ${item.title} → telegram:${tg.status}`);
 
-    // 3) انتشار در اینستاگرام (از طریق Make)
-    const ig = await publishToInstagram({
-      id: item.id,
-      title: item.title,
-      ig_caption: item.ig_caption,
-      image_url: item.image_url,
-      source_image_url: item.source_image_url,
-    });
-    if (ig.status === "success") igSuccess++;
-    else if (ig.status === "skipped") igSkipped++;
-    else igError++;
+    // 3) انتشار در اینستاگرام
+    let ig: { status: "success" | "skipped" | "error"; post_url?: string; error?: string };
+    if (!schedule.instagram.enabled) {
+      ig = { status: "skipped", error: "اینستاگرام در تنظیمات زمان‌بندی غیرفعال است" };
+      igSkipped++;
+    } else {
+      ig = await publishToInstagram({
+        id: item.id,
+        title: item.title,
+        ig_caption: item.ig_caption,
+        image_url: item.image_url,
+        source_image_url: item.source_image_url,
+      });
+      if (ig.status === "success") igSuccess++;
+      else if (ig.status === "skipped") igSkipped++;
+      else igError++;
+    }
     console.log(`[pipeline:publish] ${item.title} → instagram:${ig.status}`);
 
     results.push({
