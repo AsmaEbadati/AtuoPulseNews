@@ -14,13 +14,14 @@ import { prepareInstagramImage, validateInstagramImage, type InstagramImageRatio
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
+export const DEFAULT_MAKE_WEBHOOK_URL =
+  "https://hook.us2.make.com/gggarffsj3hvwprvvv388hjt968xhrwe";
+
 export const isGraphApiConfigured = Boolean(
   process.env.INSTAGRAM_ACCESS_TOKEN && process.env.INSTAGRAM_ACCOUNT_ID
 );
 
-export const isMakeWebhookConfigured = Boolean(
-  process.env.MAKE_INSTAGRAM_WEBHOOK_URL || process.env.INSTAGRAM_WEBHOOK_URL
-);
+export const isMakeWebhookConfigured = true;
 
 export interface PublishResult {
   news_id: string;
@@ -140,7 +141,7 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
     igConfig.webhook_url?.trim() ||
     process.env.MAKE_INSTAGRAM_WEBHOOK_URL?.trim() ||
     process.env.INSTAGRAM_WEBHOOK_URL?.trim() ||
-    "";
+    DEFAULT_MAKE_WEBHOOK_URL;
   const ratio: InstagramImageRatio = igConfig.aspect_ratio === "portrait" ? "portrait" : "square";
 
   const hasMake = Boolean(webhookUrl);

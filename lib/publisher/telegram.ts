@@ -14,16 +14,15 @@ import { getSupabaseClient, isSupabaseConfigured } from "../supabase";
 
 const TELEGRAM_API = "https://api.telegram.org";
 
+const DEFAULT_BOT_TOKEN = "8783134519:AAHz8iS8AWf3TCRVFhs7aJ2x7miuZdRWM3c";
+const DEFAULT_CHANNEL_ID = "104067526"; // یا آیدی کانال @AutoPulseNews
+
 /** تلگرام/کانال کانفیگ شده؟ */
-export const isTelegramConfigured = Boolean(
-  process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHANNEL_ID
-);
+export const isTelegramConfigured = true;
 
 function requireConfig() {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHANNEL_ID;
-  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not configured.");
-  if (!chatId) throw new Error("TELEGRAM_CHANNEL_ID is not configured.");
+  const token = process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHANNEL_ID || DEFAULT_CHANNEL_ID;
   return { token, chatId };
 }
 

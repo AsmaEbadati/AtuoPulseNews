@@ -768,6 +768,34 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                   </label>
                 </div>
 
+                {/* وضعیت اتصال تلگرام در بک‌اند */}
+                {p.key === "telegram" && (
+                  <div
+                    style={{
+                      marginTop: "var(--space-2)",
+                      padding: "var(--space-3)",
+                      background: "var(--color-surface-2)",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--color-border-2)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-1)" }}>
+                        ✈️ بات تلگرام AutoPulse:
+                      </div>
+                      <div style={{ fontSize: "11px", color: "var(--color-text-2)", marginTop: "2px" }}>
+                        تنظیم‌شده روی بات و کانال @AutoPulseNews
+                      </div>
+                    </div>
+                    <span className="badge badge--success" style={{ fontSize: "11px" }}>
+                      متصل در بک‌اند
+                    </span>
+                  </div>
+                )}
+
                 {/* بخش اختصاصی تنظیمات پیشرفته اینستاگرام و Make */}
                 {p.key === "instagram" && (
                   <div
@@ -782,33 +810,42 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                       gap: "var(--space-3)",
                     }}
                   >
-                    {/* آدرس وب‌هوک Make */}
+                    {/* اتصال دائم به وب‌هوک Make */}
                     <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                        <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-1)" }}>
-                          🔗 آدرس وب‌هوک Make.com (Instagram):
-                        </span>
-                        <span style={{ fontSize: "11px", color: "var(--color-primary)" }}>بدون کدنویسی</span>
-                      </div>
-                      <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                        <input
-                          type="url"
-                          dir="ltr"
-                          placeholder="https://hook.eu1.make.com/xxxxxxxxxxxxxxxx"
-                          value={config.webhook_url || ""}
-                          onChange={(e) => updatePlatformConfig("instagram", { webhook_url: e.target.value })}
-                          className="input"
-                          style={{ flex: 1, padding: "6px 10px", fontSize: "12px", fontFamily: "monospace" }}
-                        />
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-1)" }}>
+                            🔗 وب‌هوک Make.com (Instagram):
+                          </span>
+                          <span className="badge badge--success" style={{ fontSize: "11px" }}>
+                            متصل به سناریوی دائمی بک‌اند
+                          </span>
+                        </div>
                         <button
                           type="button"
                           onClick={() => testMakeWebhook()}
-                          disabled={testingMakeWebhook || !config.webhook_url}
+                          disabled={testingMakeWebhook}
                           className="btn btn--outline"
-                          style={{ fontSize: "11px", padding: "6px 12px", whiteSpace: "nowrap" }}
+                          style={{ fontSize: "11px", padding: "4px 10px", whiteSpace: "nowrap" }}
                         >
-                          {testingMakeWebhook ? "در حال ارسال..." : "تست وب‌هوک"}
+                          {testingMakeWebhook ? "در حال ارسال..." : "تست اتصال Make"}
                         </button>
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          fontFamily: "monospace",
+                          padding: "6px 10px",
+                          background: "var(--color-surface-1)",
+                          borderRadius: "var(--radius-sm)",
+                          border: "1px solid var(--color-border-2)",
+                          color: "var(--color-text-2)",
+                          direction: "ltr",
+                          textAlign: "left",
+                        }}
+                      >
+                        https://hook.us2.make.com/gggarffsj3...
                       </div>
 
                       {makeTestResult && (

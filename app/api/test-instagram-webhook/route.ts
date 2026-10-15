@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { sendToMakeWebhook } from "@/lib/publisher/instagram";
+import { sendToMakeWebhook, DEFAULT_MAKE_WEBHOOK_URL } from "@/lib/publisher/instagram";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const webhookUrl = body.webhook_url?.trim() || process.env.MAKE_INSTAGRAM_WEBHOOK_URL;
+    const webhookUrl =
+      body.webhook_url?.trim() ||
+      process.env.MAKE_INSTAGRAM_WEBHOOK_URL ||
+      DEFAULT_MAKE_WEBHOOK_URL;
 
     if (!webhookUrl || !webhookUrl.startsWith("https://")) {
       return NextResponse.json(
