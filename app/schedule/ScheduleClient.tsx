@@ -16,6 +16,8 @@ interface AIStatusResponse {
   configured: boolean;
   status: "active" | "quota_exceeded" | "ready" | "missing_key" | "error";
   message: string;
+  keySource?: "test_input" | "custom" | "server" | "none";
+  maskedKey?: string;
   latencyMs?: number;
   model?: string;
   rawError?: string;
@@ -69,15 +71,24 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
     }
   };
 
+  const [showApiKey, setShowApiKey] = useState(false);
+
   // دریافت وضعیت اولیه هوش مصنوعی
   useEffect(() => {
     fetchAiStatus(false);
   }, []);
 
-  const fetchAiStatus = async (testPing = false) => {
+  const fetchAiStatus = async (testPing = false, keyOverride?: string) => {
     setIsCheckingAi(true);
     try {
-      const res = await fetch(`/api/ai-status${testPing ? "?test=true" : ""}`);
+      const params = new URLSearchParams();
+      if (testPing) params.set("test", "true");
+      const keyToTest = keyOverride !== undefined ? keyOverride : settings.ai_settings.custom_api_key;
+      if (keyToTest && keyToTest.trim()) {
+        params.set("key", keyToTest.trim());
+      }
+      const qs = params.toString() ? `?${params.toString()}` : "";
+      const res = await fetch(`/api/ai-status${qs}`);
       const data = (await res.json()) as AIStatusResponse;
       setAiStatus(data);
     } catch {
@@ -89,6 +100,17 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
     } finally {
       setIsCheckingAi(false);
     }
+  };
+
+  const updateCustomApiKey = (key: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      ai_settings: {
+        ...prev.ai_settings,
+        custom_api_key: key,
+      },
+    }));
+    setSaveSuccess(false);
   };
 
   // به‌روزرسانی تنظیمات پلتفرم
@@ -298,6 +320,106 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
               <span>{isCheckingAi ? "در حال تست..." : "بررسی و تست آنلاین سهمیه"}</span>
             </button>
           </div>
+        </div>
+
+        {/* فیلد اختصاصی وارد کردن کلید API هوش مصنوعی */}
+        <div
+          style={{
+            marginTop: "var(--space-4)",
+            padding: "var(--space-3) var(--space-4)",
+            background: "var(--color-surface-2)",
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--color-border-2)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "var(--space-2)",
+              flexWrap: "wrap",
+              gap: "var(--space-2)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-1)" }}>
+                🔑 کلید اختصاصی API هوش مصنوعی (اختیاری):
+              </span>
+              {settings.ai_settings.custom_api_key?.trim() ? (
+                <span className="badge badge--primary">استفاده از کلید اختصاصی پنل</span>
+              ) : aiStatus?.keySource === "server" ? (
+                <span className="badge badge--success">استفاده از کلید پیش‌فرض سرور (بک‌اند)</span>
+              ) : (
+                <span className="badge badge--neutral">بدون کلید فعال</span>
+              )}
+            </div>
+
+            {settings.ai_settings.custom_api_key?.trim() && (
+              <button
+                type="button"
+                onClick={() => updateCustomApiKey("")}
+                className="btn btn--outline"
+                style={{ fontSize: "11px", padding: "2px 8px", height: "auto" }}
+                title="حذف کلید اختصاصی و بازگشت به کلید پیش‌فرض بک‌اند"
+              >
+                بازنشانی به کلید پیش‌فرض سرور
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: "var(--space-2)" }}>
+            <div style={{ position: "relative", flex: 1 }}>
+              <input
+                type={showApiKey ? "text" : "password"}
+                dir="ltr"
+                placeholder="nvapi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (یا کلید جدید خود را وارد کنید)"
+                value={settings.ai_settings.custom_api_key || ""}
+                onChange={(e) => updateCustomApiKey(e.target.value)}
+                className="input"
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  paddingLeft: "70px",
+                  fontSize: "13px",
+                  fontFamily: "monospace",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                style={{
+                  position: "absolute",
+                  left: "8px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "11px",
+                  color: "var(--color-text-2)",
+                  padding: "2px 6px",
+                }}
+              >
+                {showApiKey ? "مخفی" : "نمایش"}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => fetchAiStatus(true, settings.ai_settings.custom_api_key)}
+              disabled={isCheckingAi}
+              className="btn btn--outline"
+              style={{ fontSize: "12px", padding: "8px 14px", whiteSpace: "nowrap" }}
+              title="تست مستقیم این کلید"
+            >
+              {isCheckingAi ? "در حال تست..." : "تست این کلید"}
+            </button>
+          </div>
+
+          <p style={{ margin: "6px 0 0", fontSize: "12px", color: "var(--color-text-2)", lineHeight: 1.5 }}>
+            💡 به صورت پیش‌فرض سیستم از کلید سرور (NVIDIA_API_KEY در بک‌اند) استفاده می‌کند. اگر کلید جدیدی دارید یا می‌خواهید سهمیه جدیدی ست کنید، آن را در این کادر قرار داده و دکمه «ذخیره تنظیمات» را بزنید. در صورتی که این کادر خالی باشد، کلید سرور به عنوان پیش‌فرض فعال است.
+          </p>
         </div>
 
         {/* پیام ویژه در صورت اتمام سهمیه */}

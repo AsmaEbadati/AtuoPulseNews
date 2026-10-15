@@ -23,9 +23,17 @@ const TARGET_LEN = 1000; // هدف ایده‌آل برای پرامپت
 
 export const isAIConfigured = Boolean(process.env.NVIDIA_API_KEY);
 
-function getApiKey(): string {
-  const key = process.env.NVIDIA_API_KEY;
-  if (!key) throw new Error("NVIDIA_API_KEY is not configured.");
+export function getEffectiveApiKey(overrideKey?: string): string {
+  return overrideKey?.trim() || process.env.NVIDIA_API_KEY?.trim() || "";
+}
+
+export function isAIAvailable(overrideKey?: string): boolean {
+  return Boolean(getEffectiveApiKey(overrideKey));
+}
+
+function getApiKey(overrideKey?: string): string {
+  const key = getEffectiveApiKey(overrideKey);
+  if (!key) throw new Error("کلید هوش مصنوعی نه در بک‌اند سرور و نه در پنل تنظیمات ثبت نشده است.");
   return key;
 }
 
@@ -144,11 +152,16 @@ export function buildRetryPrompt(
 // ------------------------------------------------------------------
 // فراخوانی مدل + پارس JSON
 // ------------------------------------------------------------------
-export async function callModel(systemPrompt: string, userPrompt: string): Promise<string> {
+export async function callModel(
+  systemPrompt: string,
+  userPrompt: string,
+  overrideApiKey?: string
+): Promise<string> {
+  const apiKey = getApiKey(overrideApiKey);
   const res = await fetch(NVIDIA_API_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${getApiKey()}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -245,12 +258,17 @@ const MAX_ATTEMPTS = 3;
 
 export async function generateContent(
   item: RawNewsItem,
-  tone: AITone = "formal"
+  tone: AITone = "formal",
+  overrideApiKey?: string
 ): Promise<AIGeneratedContent> {
   const lengthHint = `بین ${MIN_LEN} تا ${MAX_LEN} کاراکتر (هدف ~${TARGET_LEN})`;
 
   let current = parseContent(
-    await callModel(buildSystemPrompt(tone), buildUserPrompt(item, lengthHint, tone))
+    await callModel(
+      buildSystemPrompt(tone),
+      buildUserPrompt(item, lengthHint, tone),
+      overrideApiKey
+    )
   );
 
   for (let attempt = 1; attempt < MAX_ATTEMPTS; attempt++) {
@@ -270,7 +288,11 @@ export async function generateContent(
     // کوتاه بود → از مدل گسترش بخواه
     console.warn(`[ai] attempt ${attempt}: ${len} chars (too short); asking model to expand...`);
     current = parseContent(
-      await callModel(buildSystemPrompt(tone), buildRetryPrompt(item, len, tone))
+      await callModel(
+        buildSystemPrompt(tone),
+        buildRetryPrompt(item, len, tone),
+        overrideApiKey
+      )
     );
   }
 

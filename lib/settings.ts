@@ -18,6 +18,7 @@ export interface AppPublishSettings {
 export interface AppAISettings {
   tone: AITone;
   model: string;
+  custom_api_key?: string; // کلید اختصاصی واردشده در پنل کاربری (اختیاری)
 }
 
 export interface AppSettings {
@@ -49,6 +50,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ai_settings: {
     tone: "formal",
     model: "openai/gpt-oss-20b",
+    custom_api_key: "",
   },
 };
 

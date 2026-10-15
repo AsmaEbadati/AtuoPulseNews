@@ -272,7 +272,8 @@ export async function processPendingArticles(limit = 3): Promise<ProcessPendingR
           excerpt,
           published_date: null,
         },
-        currentTone
+        currentTone,
+        settings.ai_settings.custom_api_key
       );
 
       // 4) ذخیرهٔ خروجی AI

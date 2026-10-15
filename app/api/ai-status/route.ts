@@ -1,18 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAIConfigured, callModel, buildSystemPrompt } from "@/lib/ai";
+import { callModel, buildSystemPrompt } from "@/lib/ai";
+import { getAppSettings } from "@/lib/settings";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
+function maskApiKey(key: string): string {
+  if (!key) return "";
+  if (key.length <= 10) return "****";
+  const start = key.slice(0, 8);
+  const end = key.slice(-4);
+  return `${start}...${end}`;
+}
+
 export async function GET(req: NextRequest) {
   const shouldTest = req.nextUrl.searchParams.get("test") === "true";
+  const queryKey = req.nextUrl.searchParams.get("key")?.trim();
 
-  if (!isAIConfigured) {
+  // دریافت تنظیمات ذخیره‌شده در دیتابیس
+  const settings = await getAppSettings().catch(() => null);
+  const customKey = settings?.ai_settings?.custom_api_key?.trim() || "";
+  const serverKey = process.env.NVIDIA_API_KEY?.trim() || "";
+
+  // اولویت کلید: ۱) کلید ارسالی برای تست لحظه‌ای ۲) کلید اختصاصی ذخیره‌شده ۳) کلید پیش‌فرض سرور (بک‌اند)
+  const effectiveKey = queryKey || customKey || serverKey;
+  const keySource: "test_input" | "custom" | "server" | "none" = queryKey
+    ? "test_input"
+    : customKey
+    ? "custom"
+    : serverKey
+    ? "server"
+    : "none";
+
+  if (!effectiveKey) {
     return NextResponse.json(
       {
         configured: false,
+        keySource: "none",
         status: "missing_key",
-        message: "کلید NVIDIA_API_KEY در تنظیمات سرور ثبت نشده است.",
+        message: "کلید هوش مصنوعی نه در متغیرهای سرور (بک‌اند) و نه در پنل ثبت نشده است. لطفاً کلید خود را در کادر زیر وارد کنید.",
       },
       { status: 200 }
     );
@@ -22,7 +48,7 @@ export async function GET(req: NextRequest) {
   let dbQuotaError = false;
   let lastErrorMessage = "";
 
-  if (isSupabaseConfigured) {
+  if (isSupabaseConfigured && !queryKey) {
     try {
       const db = getSupabaseClient();
       const { data } = await db
@@ -37,7 +63,7 @@ export async function GET(req: NextRequest) {
         lastErrorMessage = data.process_error;
         if (
           data.process_error.includes("AI_QUOTA_EXCEEDED") ||
-          /quota|credit|insufficient|429|rate limit|resource_exhausted/i.test(
+          /quota|credit|insufficient|429|402|rate limit|resource_exhausted/i.test(
             data.process_error
           )
         ) {
@@ -54,33 +80,44 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         configured: true,
+        keySource,
+        maskedKey: maskApiKey(effectiveKey),
         status: "quota_exceeded",
         message:
-          "توکن یا اعتبار سهمیه API هوش مصنوعی به پایان رسیده است. باید منتظر شارژ سهمیه بمانید یا کلید جدید اضافه کنید.",
+          "توکن یا اعتبار سهمیه این کلید به پایان رسیده است. می‌توانید در کادر زیر یک کلید جدید وارد کنید تا جایگزین شود.",
         lastError: lastErrorMessage,
       },
       { status: 200 }
     );
   }
 
-  // اگر درخواست تست فعال بود
+  // ۲) تست آنلاین ارتباط با کلید انتخابی
   if (shouldTest) {
     const start = Date.now();
     try {
-      // یک پرامپت تستی بسیار کوتاه با ۱ جمله برای سنجش اعتبار سهمیه
       await callModel(
         buildSystemPrompt("formal"),
-        'عنوان خبر: تست اتصال\nفقط یک شیء JSON برگردان: {"rewritten_text":"این یک تست کوتاه اتصال به سرویس هوش مصنوعی اتوپالس است.","tg_caption":"تست","ig_caption":"#تست"}'
+        'عنوان خبر: تست اتصال\nفقط یک شیء JSON برگردان: {"rewritten_text":"این یک تست کوتاه اتصال به سرویس هوش مصنوعی اتوپالس است.","tg_caption":"تست","ig_caption":"#تست"}',
+        effectiveKey
       );
       const latencyMs = Date.now() - start;
+
+      const sourceLabel =
+        keySource === "custom"
+          ? "کلید اختصاصی پنل"
+          : keySource === "test_input"
+          ? "کلید واردشده در کادر"
+          : "کلید پیش‌فرض سرور (بک‌اند)";
 
       return NextResponse.json(
         {
           configured: true,
+          keySource,
+          maskedKey: maskApiKey(effectiveKey),
           status: "active",
           latencyMs,
           model: process.env.NVIDIA_API_MODEL || "openai/gpt-oss-20b",
-          message: "سرویس هوش مصنوعی فعال است و سهمیه معتبر دارد.",
+          message: `سرویس هوش مصنوعی با موفقیت پاسخ داد (${sourceLabel} معتبر و فعال است).`,
         },
         { status: 200 }
       );
@@ -94,9 +131,11 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(
           {
             configured: true,
+            keySource,
+            maskedKey: maskApiKey(effectiveKey),
             status: "quota_exceeded",
             message:
-              "توکن یا اعتبار سهمیه API هوش مصنوعی به پایان رسیده است. باید منتظر شارژ سهمیه بمانید یا کلید جدید اضافه کنید.",
+              "سهمیه یا توکن این کلید API به پایان رسیده است. می‌توانید در کادر زیر یک کلید جدید وارد کنید.",
             rawError: msg,
           },
           { status: 200 }
@@ -106,21 +145,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         {
           configured: true,
+          keySource,
+          maskedKey: maskApiKey(effectiveKey),
           status: "error",
-          message: `خطا در برقراری ارتباط با مدل: ${msg.slice(0, 150)}`,
+          message: `خطا در فراخوانی مدل با این کلید: ${msg.slice(0, 160)}`,
         },
         { status: 200 }
       );
     }
   }
 
-  // در حالت پیش‌فرض بدون تست مستقیم و بدون خطای ثبت‌شده
+  // حالت پیش‌فرض بدون تست مستقیم
+  const sourceLabel =
+    keySource === "custom"
+      ? "در حال استفاده از کلید اختصاصی واردشده در پنل"
+      : "در حال استفاده از کلید پیش‌فرض سرور (بک‌اند)";
+
   return NextResponse.json(
     {
       configured: true,
+      keySource,
+      maskedKey: maskApiKey(effectiveKey),
       status: "ready",
       model: process.env.NVIDIA_API_MODEL || "openai/gpt-oss-20b",
-      message: "سرویس هوش مصنوعی پیکربندی شده است.",
+      message: `${sourceLabel} (${maskApiKey(effectiveKey)})`,
     },
     { status: 200 }
   );
