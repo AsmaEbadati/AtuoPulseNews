@@ -541,7 +541,7 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                   padding: "8px 12px",
                   paddingLeft: "70px",
                   fontSize: "13px",
-                  fontFamily: "monospace",
+                  fontFamily: "var(--font-main)",
                 }}
               />
               <button
