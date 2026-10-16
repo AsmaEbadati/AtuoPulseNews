@@ -34,6 +34,9 @@ async function callApi<T = any>(
 }
 
 function buildMessageLink(chatId: string, messageId: number): string | null {
+  if (chatId.startsWith("@")) {
+    return `https://t.me/${chatId.slice(1)}/${messageId}`;
+  }
   const m = String(chatId).match(/^-?(\d+)$/);
   if (!m) return null;
   const numeric = m[1];

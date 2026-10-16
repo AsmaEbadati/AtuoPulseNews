@@ -6,8 +6,12 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHANNEL_ID = process.env.TELEGRAM_CHANNEL_ID;
-const MAKE_WEBHOOK = process.env.MAKE_INSTAGRAM_WEBHOOK_URL || process.env.INSTAGRAM_WEBHOOK_URL;
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://autopulsenews.netlify.app").replace(/\/+$/, "");
+const DEFAULT_MAKE_WEBHOOK = "https://hook.us2.make.com/p24hhdz7k98h6gx5aont3rq88lxc3x8p";
+const MAKE_WEBHOOK =
+  process.env.MAKE_INSTAGRAM_WEBHOOK_URL ||
+  process.env.INSTAGRAM_WEBHOOK_URL ||
+  DEFAULT_MAKE_WEBHOOK;
+const SITE_URL = "https://autopulsenews.netlify.app";
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("❌ متغیرهای Supabase در محیط یافت نشد.");
@@ -26,8 +30,13 @@ async function run() {
   const slug = `autopulse-test-${timestamp}`;
   const testImageUrl = "https://images.unsplash.com/photo-1617814076367-b759c7d7e738?auto=format&fit=crop&w=1200&q=80";
 
+  // متن تستی باید 900-1100 کاراکتر باشد (constraint: rewritten_len_ok در Supabase)
   const rewrittenText =
-    "سامانه هوشمند AutoPulse هم‌اکنون با موفقیت زنجیره انتشار یکپارچه در سه پلتفرم وب‌سایت رسمی، کانال تلگرام و صفحه اینستاگرام را اجرا کرد. این خبر تستی جهت راستی‌آزمایی صحت عملکرد وب‌هوک‌ها، تنظیم خودکار ابعاد تصویر به ۱۰۸۰×۱۰۸۰ پیکسل و هماهنگی کپشن‌های بهینه‌سازی‌شده برای شبکه‌های اجتماعی ایجاد شده است. تمام مراحل طبق زمان‌بندی و استاندارد تحریریه خودرویی انجام پذیرفت.";
+    "سامانه هوشمند خبررسانی AutoPulse هم‌اکنون با موفقیت کامل زنجیره انتشار یکپارچه خود را در سه پلتفرم اصلی یعنی وب‌سایت رسمی، کانال تلگرام و صفحه اینستاگرام آزمایش کرد. " +
+    "این خبر تستی به‌منظور راستی‌آزمایی صحت عملکرد وب‌هوک‌های سیستم، تنظیم خودکار ابعاد تصویر به استاندارد ۱۰۸۰×۱۰۸۰ پیکسل، هماهنگی کپشن‌های بهینه‌سازی‌شده برای شبکه‌های اجتماعی و بررسی صحت ارسال خودکار به تمام مقاصد ایجاد شده است. " +
+    "تمام مراحل شامل اسکرپ خبر از منبع، تشخیص تکراری نبودن، بازنویسی هوشمند با هوش مصنوعی، تولید کپشن اختصاصی برای هر پلتفرم و در نهایت انتشار هم‌زمان در سه کانال ارتباطی به‌صورت کاملاً خودکار و بدون نیاز به دخالت انسانی انجام پذیرفت. " +
+    "سامانه AutoPulse با بهره‌گیری از معماری مدرن و فناوری‌های پیشرفته پردازش زبان طبیعی، امکان پوشش اخبار لحظه‌ای صنعت خودرو را فراهم آورده و از طریق زمان‌بندی هوشمند، بهترین ساعات انتشار محتوا در هر پلتفرم را تعیین می‌کند. " +
+    "موفقیت این آزمایش نشان‌دهنده آمادگی کامل زیرساخت برای فاز بهره‌برداری تجاری است.";
 
   const tgCaption =
     "⚡️ تست انتشار خودکار AutoPulse در سایت، تلگرام و اینستاگرام\n\nسامانه هوشمند خبررسانی خودرویی AutoPulse با موفقیت زنجیره انتشار ۳ پلتفرم را آزمایش کرد.\n\n🌐 جزئیات بیشتر در سایت: " + `${SITE_URL}/news/${slug}`;
@@ -185,7 +194,7 @@ async function run() {
         p_news_id: newsId,
         p_destination: "instagram",
         p_status: "success",
-        p_post_url: igWebhook,
+        p_post_url: "https://instagram.com/autopulsenews",
         p_error: null,
       });
     } else {

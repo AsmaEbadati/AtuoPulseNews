@@ -154,6 +154,7 @@ Deno.serve(async (req) => {
       ig_caption: content.ig_caption,
       image_url: betterImage,
       source_image_url: betterImage,
+      source_url: item.source_url,
     });
     result.instagram = ig.status;
     if (ig.post_url) result.instagram_url = ig.post_url;

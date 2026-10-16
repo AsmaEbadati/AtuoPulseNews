@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   description: "تنظیم سراسری زمانبندی انتشار اخبار در سایت، تلگرام و اینستاگرام و انتخاب لحن بازنویسی هوش مصنوعی",
 };
 
+export const dynamic = "force-dynamic";
 export const revalidate = 0; // بدون کش، دریافت آنی تنظیمات
 
 export interface ScheduleItem {

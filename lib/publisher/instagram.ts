@@ -15,7 +15,7 @@ const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 export const DEFAULT_MAKE_WEBHOOK_URL =
-  "https://hook.us2.make.com/gggarffsj3hvwprvvv388hjt968xhrwe";
+  "https://hook.us2.make.com/p24hhdz7k98h6gx5aont3rq88lxc3x8p";
 
 export const isGraphApiConfigured = Boolean(
   process.env.INSTAGRAM_ACCESS_TOKEN && process.env.INSTAGRAM_ACCOUNT_ID
@@ -207,14 +207,16 @@ export async function publishToInstagram(news: InstagramNews): Promise<PublishRe
       timestamp: new Date().toISOString(),
     });
 
+    const publicIgUrl = "https://instagram.com/autopulsenews";
+
     if (makeRes.success) {
-      await completePublication(news.id, "success", webhookUrl, null);
+      await completePublication(news.id, "success", publicIgUrl, null);
       console.log(`[instagram] ✅ Published via Make.com webhook for "${news.title}"`);
       return {
         news_id: news.id,
         destination: "instagram",
         status: "success",
-        post_url: webhookUrl,
+        post_url: publicIgUrl,
       };
     } else {
       await completePublication(news.id, "error", null, makeRes.error ?? "Make error").catch(() => {});

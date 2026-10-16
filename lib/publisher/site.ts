@@ -16,16 +16,19 @@ import { getSupabaseClient, isSupabaseConfigured } from "../supabase";
  * نیازی به درخواست شبکه نیست؛ صرفاً یک علامت‌گذاری در DB + ثبت لینک عمومی.
  */
 
+export const PUBLIC_PRODUCTION_SITE_URL = "https://autopulsenews.netlify.app";
+
+const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || PUBLIC_PRODUCTION_SITE_URL;
 const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL || "https://autopulsenews.netlify.app"
+  rawSiteUrl.includes("localhost") ? PUBLIC_PRODUCTION_SITE_URL : rawSiteUrl
 ).replace(/\/+$/, "");
 
 /** آیا انتشار سایت پیکربندی شده (URL سایت تعیین شده)؟ */
 export const isSiteConfigured = Boolean(SITE_URL);
 
 function buildArticleUrl(slug: string): string | null {
-  if (!SITE_URL) return null;
-  return `${SITE_URL}/news/${slug}`;
+  const base = SITE_URL || PUBLIC_PRODUCTION_SITE_URL;
+  return `${base}/news/${slug}`;
 }
 
 // ------------------------------------------------------------------

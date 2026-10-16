@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Icon, IconBox, type IconName } from "../components/Icons";
-import type { AppSettings, PlatformScheduleConfig } from "@/lib/settings";
+import type { AppSettings, PlatformScheduleConfig, ScrapeScheduleConfig } from "@/lib/settings";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { AI_TONES, type AITone } from "@/lib/ai";
 import type { ScheduleItem } from "./page";
 
@@ -24,10 +26,58 @@ interface AIStatusResponse {
 }
 
 export default function ScheduleClient({ initialSettings, items }: Props) {
+  const router = useRouter();
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSettings(initialSettings);
+  }, [initialSettings]);
+
+  // تنظیمات اسکرپ خودکار باما و انتشار روزانه
+  const scrapeConfig: ScrapeScheduleConfig =
+    settings.scrape_schedule || DEFAULT_SETTINGS.scrape_schedule;
+
+  const updateScrapeConfig = (partial: Partial<ScrapeScheduleConfig>) => {
+    setSettings((prev) => ({
+      ...prev,
+      scrape_schedule: {
+        ...(prev.scrape_schedule || DEFAULT_SETTINGS.scrape_schedule),
+        ...partial,
+      },
+    }));
+    setSaveSuccess(false);
+  };
+
+  const handleSelectFrequency = (times: number) => {
+    let schedule_times: string[] = [];
+    let cron_expression = "";
+
+    if (times === 2) {
+      schedule_times = ["10:00", "18:00"];
+      cron_expression = "30 6,14 * * *"; // 06:30, 14:30 UTC
+    } else if (times === 3) {
+      schedule_times = ["10:00", "14:30", "19:30"];
+      cron_expression = "30 6,11,16 * * *";
+    } else if (times === 4) {
+      schedule_times = ["09:30", "13:30", "17:30", "21:30"];
+      cron_expression = "0 6,10,14,18 * * *";
+    } else if (times === 6) {
+      schedule_times = ["08:30", "11:30", "14:30", "17:30", "20:30", "23:30"];
+      cron_expression = "0 5,8,11,14,17,20 * * *";
+    } else {
+      schedule_times = ["09:30", "13:30", "17:30", "21:30"];
+      cron_expression = "0 6,10,14,18 * * *";
+    }
+
+    updateScrapeConfig({
+      times_per_day: times,
+      schedule_times,
+      cron_expression,
+    });
+  };
 
   // وضعیت هوش مصنوعی و سهمیه
   const [aiStatus, setAiStatus] = useState<AIStatusResponse | null>(null);
@@ -58,37 +108,6 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
       });
     } finally {
       setIsRunningTestPipeline(false);
-    }
-  };
-
-  // تست وب‌هوک Make برای اینستاگرام
-  const [testingMakeWebhook, setTestingMakeWebhook] = useState(false);
-  const [makeTestResult, setMakeTestResult] = useState<{ success: boolean; message: string } | null>(null);
-
-  const testMakeWebhook = async (url?: string) => {
-    const targetUrl = url || settings.publish_schedule.instagram.webhook_url;
-    if (!targetUrl || !targetUrl.trim()) {
-      setMakeTestResult({ success: false, message: "لطفاً ابتدا آدرس وب‌هوک Make را وارد کنید." });
-      return;
-    }
-    setTestingMakeWebhook(true);
-    setMakeTestResult(null);
-    try {
-      const res = await fetch("/api/test-instagram-webhook", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ webhook_url: targetUrl.trim() }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setMakeTestResult({ success: true, message: data.message || "رویداد تستی با موفقیت به Make ارسال شد!" });
-      } else {
-        setMakeTestResult({ success: false, message: data.error || "خطا در فراخوانی وب‌هوک Make." });
-      }
-    } catch {
-      setMakeTestResult({ success: false, message: "خطا در اتصال به سرور تست." });
-    } finally {
-      setTestingMakeWebhook(false);
     }
   };
 
@@ -186,6 +205,7 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
         setSettings(data.settings);
       }
       setSaveSuccess(true);
+      router.refresh();
       setTimeout(() => setSaveSuccess(false), 4000);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "خطایی رخ داد");
@@ -266,11 +286,18 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className={`btn btn--primary ${isSaving ? "btn--loading" : ""}`}
-            style={{ padding: "10px 24px", fontSize: "14px" }}
+            className={`btn ${saveSuccess ? "btn--success" : "btn--primary"} ${isSaving ? "btn--loading" : ""}`}
+            style={{
+              padding: "10px 24px",
+              fontSize: "14px",
+              background: saveSuccess ? "var(--color-success)" : undefined,
+              borderColor: saveSuccess ? "var(--color-success)" : undefined,
+              color: "#fff",
+              transition: "all 0.25s ease",
+            }}
           >
-            <Icon name="sparkle" size={15} />
-            <span>{isSaving ? "در حال ذخیره..." : "ذخیره تنظیمات"}</span>
+            <Icon name={saveSuccess ? "check" : "sparkle"} size={15} />
+            <span>{isSaving ? "در حال ذخیره..." : saveSuccess ? "ذخیره شد! ✓" : "ذخیره تنظیمات"}</span>
           </button>
         </div>
       </div>
@@ -582,13 +609,218 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
       </div>
 
       {/* ─────────────────────────────────────────────────────────── */}
-      {/* بخش اول: زمان‌بندی انتشار پلتفرم‌ها */}
+      {/* بخش اول: فرکانس اسکرپ خودکار باما و انتشار روزانه */}
+      {/* ─────────────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: "var(--space-8)" }}>
+        <div className="section-head">
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+            <IconBox name="refresh" tone="primary" size={18} />
+            <h2 className="section-head__title">۱. فرکانس اسکرپ اخبار باما و پایپ‌لاین انتشار روزانه</h2>
+          </div>
+          <span className="badge badge--success" style={{ fontSize: "12px", padding: "4px 10px" }}>
+            پیش‌فرض فعال: {scrapeConfig.times_per_day} بار در شبانه‌روز
+          </span>
+        </div>
+
+        <p style={{ fontSize: "13px", color: "var(--color-text-2)", marginTop: "-12px", marginBottom: "var(--space-4)" }}>
+          تعیین کنید ربات در شبانه‌روز چند بار سایت باما را پایش کند. خبرهای جدید پس از اعتبارسنجی عدم تکرار در دیتابیس ثبت شده و بلافاصله با هوش مصنوعی بازنویسی و در ۳ پلتفرم منتشر می‌شوند.
+        </p>
+
+        <div
+          className="card"
+          style={{
+            background: "linear-gradient(145deg, var(--color-surface-1) 0%, var(--color-surface-2) 100%)",
+            borderColor: "var(--color-border-1)",
+            padding: "var(--space-5)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-5)",
+          }}
+        >
+          {/* ردیف انتخاب فرکانس با دکمه‌های سریع */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-3)", flexWrap: "wrap", gap: "var(--space-2)" }}>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-1)" }}>
+                ⏱️ تعداد دفعات اسکرپ و انتشار در روز:
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--color-text-2)" }}>
+                می‌توانید تعداد دفعات و ساعات دقیق هر نوبت را طبق تمایل خود تنظیم نمایید.
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "var(--space-3)" }}>
+              {[
+                { times: 2, label: "۲ بار در روز", desc: "صبح و عصر", icon: "🌅" },
+                { times: 3, label: "۳ بار در روز", desc: "صبح، ظهر و عصر", icon: "🌤️" },
+                { times: 4, label: "۴ بار در روز", desc: "پیش‌فرض استاندارد", icon: "⚡", recommended: true },
+                { times: 6, label: "۶ بار در روز", desc: "پایش فشرده هر ۳ ساعت", icon: "🔥" },
+              ].map((opt) => {
+                const isSelected = scrapeConfig.times_per_day === opt.times;
+                return (
+                  <button
+                    key={opt.times}
+                    type="button"
+                    onClick={() => handleSelectFrequency(opt.times)}
+                    style={{
+                      padding: "var(--space-3) var(--space-4)",
+                      borderRadius: "var(--radius-md)",
+                      border: isSelected ? "2px solid var(--color-primary)" : "1px solid var(--color-border-2)",
+                      background: isSelected ? "rgba(99, 102, 241, 0.12)" : "var(--color-surface-1)",
+                      cursor: "pointer",
+                      textAlign: "right",
+                      position: "relative",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    {opt.recommended && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          left: "8px",
+                          top: "-8px",
+                          background: "var(--color-primary)",
+                          color: "#fff",
+                          fontSize: "10px",
+                          padding: "1px 6px",
+                          borderRadius: "999px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        پیش‌فرض
+                      </span>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "16px" }}>{opt.icon}</span>
+                      <span style={{ fontWeight: 700, fontSize: "14px", color: isSelected ? "var(--color-primary)" : "var(--color-text-1)" }}>
+                        {opt.label}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "11px", color: "var(--color-text-2)" }}>{opt.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ساعات برنامه‌ریزی‌شده در شبانه‌روز */}
+          <div
+            style={{
+              padding: "var(--space-4)",
+              background: "var(--color-surface-1)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border-2)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-3)", flexWrap: "wrap", gap: "var(--space-2)" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-1)", display: "flex", alignItems: "center", gap: "6px" }}>
+                <span>🕒 ساعات پایش باما و انتشار (به وقت محلی تهران):</span>
+              </div>
+              <span className="badge badge--neutral" style={{ fontSize: "11px" }}>
+                کران جاب pg_cron در دیتابیس: <code>{scrapeConfig.cron_expression}</code>
+              </span>
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center" }}>
+              {scrapeConfig.schedule_times.map((time, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--space-2)",
+                    background: "var(--color-surface-2)",
+                    padding: "6px 12px",
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--color-border-1)",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                  }}
+                >
+                  <span style={{ color: "var(--color-primary)" }}>
+                    {idx === 0 ? "🌅" : idx === 1 ? "☀️" : idx === 2 ? "🌆" : idx === 3 ? "🌙" : "⏰"} نوبت {idx + 1}:
+                  </span>
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => {
+                      const newTimes = [...scrapeConfig.schedule_times];
+                      newTimes[idx] = e.target.value;
+                      updateScrapeConfig({ schedule_times: newTimes });
+                    }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "var(--color-text-1)",
+                      fontWeight: 700,
+                      fontSize: "13px",
+                      cursor: "pointer",
+                      padding: "0 2px",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* سوئیچ هوشمند انتشار آنی خبرهای جدید */}
+          <div
+            style={{
+              padding: "var(--space-3) var(--space-4)",
+              background: "rgba(34, 197, 94, 0.06)",
+              border: "1px solid rgba(34, 197, 94, 0.25)",
+              borderRadius: "var(--radius-md)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "var(--space-3)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+              <IconBox name="check" tone="success" size={18} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "13px", color: "var(--color-text-1)" }}>
+                  انتشار آنی بلافاصله پس از تولید محتوا با هوش مصنوعی (فعال به صورت پیش‌فرض)
+                </div>
+                <div style={{ fontSize: "12px", color: "var(--color-text-2)", marginTop: "2px" }}>
+                  هنگامی که کران جاب اجرا می‌شود، اخبار تکراری فیلتر شده و خبرهای دارای وضعیت new بلافاصله بازنویسی و هم‌زمان در وب‌سایت، تلگرام و اینستاگرام منتشر می‌شوند.
+                </div>
+              </div>
+            </div>
+
+            <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
+              <input
+                type="checkbox"
+                checked={scrapeConfig.auto_publish_on_new}
+                onChange={(e) => updateScrapeConfig({ auto_publish_on_new: e.target.checked })}
+                style={{ width: "18px", height: "18px", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: "12px", fontWeight: 700, color: scrapeConfig.auto_publish_on_new ? "var(--color-success)" : "var(--color-text-2)" }}>
+                {scrapeConfig.auto_publish_on_new ? "فعال (پیش‌فرض)" : "غیرفعال"}
+              </span>
+            </label>
+          </div>
+
+          {/* مراحل پایپ‌لاین */}
+          <div style={{ fontSize: "12px", color: "var(--color-text-2)", background: "var(--color-surface-2)", padding: "var(--space-3) var(--space-4)", borderRadius: "var(--radius-md)", lineHeight: 1.7 }}>
+            <span style={{ fontWeight: 700, color: "var(--color-text-1)" }}>گردش کار خودکار پایپ‌لاین: </span>
+            <span>۱) اسکرپ باما ({scrapeConfig.times_per_day} بار در روز) ⟵ </span>
+            <span>۲) تشخیص تکراری بودن با بررسی slug و URL در دیتابیس ⟵ </span>
+            <span>۳) ثبت خبر با وضعیت new در دیتابیس ⟵ </span>
+            <span>۴) تولید فوری متن تحلیلی و کپشن با AI ⟵ </span>
+            <span>۵) انتشار خودکار در سایت، تلگرام (@autopulsenewsai) و اینستاگرام (@autopulsenews).</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────── */}
+      {/* بخش دوم: زمان‌بندی انتشار پلتفرم‌ها */}
       {/* ─────────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: "var(--space-8)" }}>
         <div className="section-head">
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
             <IconBox name="clock" tone="primary" size={18} />
-            <h2 className="section-head__title">۱. تنظیمات زمان‌بندی انتشار در پلتفرم‌ها</h2>
+            <h2 className="section-head__title">۲. تنظیمات زمان‌بندی انتشار در پلتفرم‌ها</h2>
           </div>
           <span className="section-head__meta">سایت · تلگرام · اینستاگرام</span>
         </div>
@@ -787,7 +1019,7 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                         ✈️ بات تلگرام AutoPulse:
                       </div>
                       <div style={{ fontSize: "11px", color: "var(--color-text-2)", marginTop: "2px" }}>
-                        تنظیم‌شده روی بات و کانال @AutoPulseNews
+                        تنظیم‌شده روی بات و کانال خبری @autopulsenewsai
                       </div>
                     </div>
                     <span className="badge badge--success" style={{ fontSize: "11px" }}>
@@ -796,7 +1028,7 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                   </div>
                 )}
 
-                {/* بخش اختصاصی تنظیمات پیشرفته اینستاگرام و Make */}
+                {/* بخش اختصاصی تنظیمات اینستاگرام */}
                 {p.key === "instagram" && (
                   <div
                     style={{
@@ -810,59 +1042,19 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                       gap: "var(--space-3)",
                     }}
                   >
-                    {/* اتصال دائم به وب‌هوک Make */}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-                          <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-1)" }}>
-                            🔗 وب‌هوک Make.com (Instagram):
-                          </span>
-                          <span className="badge badge--success" style={{ fontSize: "11px" }}>
-                            متصل به سناریوی دائمی بک‌اند
-                          </span>
+                    {/* وضعیت اتصال پیج اینستاگرام در بک‌اند */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-1)" }}>
+                          📸 صفحه اینستاگرام AutoPulse:
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => testMakeWebhook()}
-                          disabled={testingMakeWebhook}
-                          className="btn btn--outline"
-                          style={{ fontSize: "11px", padding: "4px 10px", whiteSpace: "nowrap" }}
-                        >
-                          {testingMakeWebhook ? "در حال ارسال..." : "تست اتصال Make"}
-                        </button>
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: "11px",
-                          fontFamily: "monospace",
-                          padding: "6px 10px",
-                          background: "var(--color-surface-1)",
-                          borderRadius: "var(--radius-sm)",
-                          border: "1px solid var(--color-border-2)",
-                          color: "var(--color-text-2)",
-                          direction: "ltr",
-                          textAlign: "left",
-                        }}
-                      >
-                        https://hook.us2.make.com/gggarffsj3...
-                      </div>
-
-                      {makeTestResult && (
-                        <div
-                          style={{
-                            marginTop: "6px",
-                            fontSize: "11px",
-                            padding: "6px 10px",
-                            borderRadius: "var(--radius-sm)",
-                            background: makeTestResult.success ? "rgba(34, 197, 94, 0.1)" : "rgba(239, 68, 68, 0.1)",
-                            color: makeTestResult.success ? "#22c55e" : "#ef4444",
-                            border: `1px solid ${makeTestResult.success ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)"}`,
-                          }}
-                        >
-                          {makeTestResult.message}
+                        <div style={{ fontSize: "11px", color: "var(--color-text-2)", marginTop: "2px" }}>
+                          متصل به پیج @autopulsenews (پایپ‌لاین انتشار در بک‌اند تنظیم شده است)
                         </div>
-                      )}
+                      </div>
+                      <span className="badge badge--success" style={{ fontSize: "11px" }}>
+                        متصل در بک‌اند
+                      </span>
                     </div>
 
                     {/* ابعاد تصویر برای اینستاگرام */}
@@ -956,13 +1148,13 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
       </div>
 
       {/* ─────────────────────────────────────────────────────────── */}
-      {/* بخش دوم: تنظیمات سبک و لحن ادبی هوش مصنوعی */}
+      {/* بخش سوم: تنظیمات سبک و لحن ادبی هوش مصنوعی */}
       {/* ─────────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: "var(--space-8)" }}>
         <div className="section-head">
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
             <IconBox name="sparkle" tone="primary" size={18} />
-            <h2 className="section-head__title">۲. لحن و سبک ادبی بازنویسی هوش مصنوعی</h2>
+            <h2 className="section-head__title">۳. لحن و سبک ادبی بازنویسی هوش مصنوعی</h2>
           </div>
           <span className="section-head__meta">{currentToneInfo.name}</span>
         </div>
@@ -1104,36 +1296,61 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
           alignItems: "center",
           flexWrap: "wrap",
           gap: "var(--space-4)",
-          background: "linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-1) 100%)",
+          background: saveSuccess
+            ? "linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, var(--color-surface-1) 100%)"
+            : "linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-1) 100%)",
+          borderColor: saveSuccess ? "var(--color-success)" : undefined,
           marginBottom: "var(--space-10)",
+          transition: "all 0.3s ease",
         }}
       >
         <div>
-          <div style={{ fontWeight: 700, fontSize: "15px" }}>آماده اعمال تنظیمات هستید؟</div>
-          <div style={{ fontSize: "12px", color: "var(--color-text-2)", marginTop: "2px" }}>
-            با زدن دکمه زیر، تمام تنظیمات زمان‌بندی و سبک ادبی فوراً ذخیره شده و در اجراهای بعدی اعمال می‌شوند.
+          <div style={{ fontWeight: 700, fontSize: "15px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <span>آماده اعمال تنظیمات هستید؟</span>
+            {saveSuccess && (
+              <span className="badge badge--success animate-fade-in" style={{ fontSize: "12px", padding: "2px 8px" }}>
+                ✓ در دیتابیس ذخیره شد
+              </span>
+            )}
           </div>
+          <div style={{ fontSize: "12px", color: saveSuccess ? "var(--color-success)" : "var(--color-text-2)", marginTop: "2px" }}>
+            {saveSuccess
+              ? "تمام تنظیمات زمان‌بندی و سبک ادبی با موفقیت در Supabase ذخیره شدند."
+              : "با زدن دکمه زیر، تمام تنظیمات زمان‌بندی و سبک ادبی فوراً ذخیره شده و در اجراهای بعدی اعمال می‌شوند."}
+          </div>
+          {saveError && (
+            <div style={{ color: "var(--color-accent)", fontSize: "12px", marginTop: "4px" }}>
+              خطا در ذخیره: {saveError}
+            </div>
+          )}
         </div>
 
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className={`btn btn--primary ${isSaving ? "btn--loading" : ""}`}
-          style={{ padding: "12px 28px", fontSize: "14px" }}
+          className={`btn ${saveSuccess ? "btn--success" : "btn--primary"} ${isSaving ? "btn--loading" : ""}`}
+          style={{
+            padding: "12px 28px",
+            fontSize: "14px",
+            background: saveSuccess ? "var(--color-success)" : undefined,
+            borderColor: saveSuccess ? "var(--color-success)" : undefined,
+            color: "#fff",
+            transition: "all 0.25s ease",
+          }}
         >
-          <Icon name="check" size={16} />
-          <span>{isSaving ? "در حال ذخیره..." : "ذخیره نهایی تنظیمات"}</span>
+          <Icon name={saveSuccess ? "check" : "check"} size={16} />
+          <span>{isSaving ? "در حال ذخیره..." : saveSuccess ? "ذخیره شد! ✓" : "ذخیره نهایی تنظیمات"}</span>
         </button>
       </div>
 
       {/* ─────────────────────────────────────────────────────────── */}
-      {/* بخش سوم: فهرست آخرین اخبار پردازش‌شده (اختیاری جهت بررسی) */}
+      {/* بخش چهارم: فهرست آخرین اخبار پردازش‌شده (اختیاری جهت بررسی) */}
       {/* ─────────────────────────────────────────────────────────── */}
       <div>
         <div className="section-head">
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
             <IconBox name="chart" tone="primary" size={18} />
-            <h2 className="section-head__title">۳. آخرین اخبار پردازش‌شده در سیستم</h2>
+            <h2 className="section-head__title">۴. آخرین اخبار پردازش‌شده در سیستم</h2>
           </div>
           <span className="section-head__meta">{items.length} خبر اخیر</span>
         </div>

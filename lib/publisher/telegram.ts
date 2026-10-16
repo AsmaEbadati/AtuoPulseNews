@@ -51,11 +51,14 @@ async function callApi<T = any>(
   return data.result as T;
 }
 
-/** ساخت لینک عمومی پیام در کانال (اگر chat_id عددی باشد). */
+/** ساخت لینک عمومی پیام در کانال */
 function buildMessageLink(chatId: string, messageId: number): string | null {
+  if (chatId.startsWith("@")) {
+    return `https://t.me/${chatId.slice(1)}/${messageId}`;
+  }
   // chat_id کانال‌های عمومی معمولاً با -100 شروع می‌شود.
   const m = String(chatId).match(/^-?(\d+)$/);
-  if (!m) return null; // @username → نمی‌توان لینک عددی ساخت
+  if (!m) return null;
   const numeric = m[1];
   const internalId = numeric.startsWith("-100") ? numeric.slice(3) : numeric;
   return `https://t.me/c/${internalId}/${messageId}`;

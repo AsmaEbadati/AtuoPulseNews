@@ -24,36 +24,67 @@ export function NewsLinkPills({
   telegramUrl,
   instagramUrl,
 }: NewsLinkPillsProps) {
+  // لینک تمیز تلگرام به کانال خبری رسمی
+  let finalTelegramUrl: string | null = null;
+  if (telegramUrl) {
+    if (telegramUrl.includes("t.me/autopulsenewsai")) {
+      finalTelegramUrl = telegramUrl;
+    } else {
+      const msgMatch = telegramUrl.match(/\/(\d+)$/);
+      finalTelegramUrl = msgMatch ? `https://t.me/autopulsenewsai/${msgMatch[1]}` : "https://t.me/autopulsenewsai";
+    }
+  } else {
+    finalTelegramUrl = "https://t.me/autopulsenewsai";
+  }
+
+  // لینک تمیز اینستاگرام به پیج یا پست منتشرشده
+  let finalInstagramUrl: string | null = null;
+  if (instagramUrl) {
+    if (instagramUrl.startsWith("https://instagram.com/") || instagramUrl.startsWith("https://www.instagram.com/")) {
+      finalInstagramUrl = instagramUrl;
+    } else {
+      finalInstagramUrl = "https://instagram.com/autopulsenews";
+    }
+  } else {
+    finalInstagramUrl = "https://instagram.com/autopulsenews";
+  }
+
   return (
     <div className="link-pills">
-      {/* منبع اصلی خبر */}
+      {/* منبع اصلی خبر: باما (bama.ir) */}
       {sourceUrl ? (
         <a
           className="link-pill"
           href={sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          title="خبر اصلی در باما"
+          title="مشاهده خبر اصلی در پایگاه باما (bama.ir)"
         >
           <span className="link-pill__icon">
             <Icon name="source" size={13} />
           </span>
-          منبع
+          منبع: باما
         </a>
       ) : (
-        <span className="link-pill link-pill--disabled">
+        <a
+          className="link-pill"
+          href="https://bama.ir/news"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="پایگاه خبری باما (منبع اصلی)"
+        >
           <span className="link-pill__icon">
             <Icon name="source" size={13} />
           </span>
-          منبع
-        </span>
+          منبع: باما
+        </a>
       )}
 
-      {/* نسخهٔ بازنویسی‌شدهٔ AI (همین سایت) */}
+      {/* نسخهٔ بازنویسی‌شدهٔ AI (سایت AutoPulse) */}
       <Link
         className="link-pill link-pill--primary"
         href={`/news/${aiSlug}`}
-        title="نسخهٔ بازنویسی‌شدهٔ AI"
+        title="نسخه بازنویسی‌شده اختصاصی AutoPulse"
       >
         <span className="link-pill__icon">
           <Icon name="ai" size={13} />
@@ -61,51 +92,33 @@ export function NewsLinkPills({
         نسخهٔ AI
       </Link>
 
-      {/* پست تلگرام */}
-      {telegramUrl ? (
-        <a
-          className="link-pill"
-          href={telegramUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="پست در تلگرام"
-        >
-          <span className="link-pill__icon">
-            <Icon name="telegram" size={13} />
-          </span>
-          تلگرام
-        </a>
-      ) : (
-        <span className="link-pill link-pill--disabled" title="هنوز در تلگرام منتشر نشده">
-          <span className="link-pill__icon">
-            <Icon name="telegram" size={13} />
-          </span>
-          تلگرام
+      {/* کانال تلگرام */}
+      <a
+        className="link-pill"
+        href={finalTelegramUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="مشاهده در کانال تلگرام AutoPulse"
+      >
+        <span className="link-pill__icon">
+          <Icon name="telegram" size={13} />
         </span>
-      )}
+        کانال تلگرام
+      </a>
 
-      {/* پست اینستاگرام */}
-      {instagramUrl ? (
-        <a
-          className="link-pill"
-          href={instagramUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="پست در اینستاگرام"
-        >
-          <span className="link-pill__icon">
-            <Icon name="instagram" size={13} />
-          </span>
-          اینستاگرام
-        </a>
-      ) : (
-        <span className="link-pill link-pill--disabled" title="هنوز در اینستاگرام منتشر نشده">
-          <span className="link-pill__icon">
-            <Icon name="instagram" size={13} />
-          </span>
-          اینستاگرام
+      {/* صفحه اینستاگرام */}
+      <a
+        className="link-pill"
+        href={finalInstagramUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="مشاهده در صفحه اینستاگرام AutoPulse"
+      >
+        <span className="link-pill__icon">
+          <Icon name="instagram" size={13} />
         </span>
-      )}
+        اینستاگرام
+      </a>
     </div>
   );
 }
