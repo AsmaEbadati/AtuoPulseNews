@@ -75,6 +75,20 @@
 }
 
 /* ─── Reset ─── */
+/* تضمین اعمال سراسری و بدون استثنای فونت واحد Vazirmatn در کل سایت */
+*, *::before, *::after {
+  font-family: inherit;
+}
+html, body {
+  font-family: var(--font-main), 'Vazirmatn', system-ui, -apple-system, sans-serif !important;
+}
+button, input, select, textarea, optgroup {
+  font-family: var(--font-main), 'Vazirmatn', system-ui, -apple-system, sans-serif !important;
+}
+code, kbd, samp {
+  font-family: var(--font-main), 'Vazirmatn', monospace !important;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { direction: rtl; scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 body {

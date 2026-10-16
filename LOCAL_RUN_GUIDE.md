@@ -53,14 +53,15 @@ PIPELINE_SECRET_KEY=choose_a_strong_secret
 
 # تلگرام (اختیاری — برای تست انتشار)
 TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
+TELEGRAM_CHANNEL_ID=your_channel_id
 
-# اینستاگرام (اختیاری — برای لایو پست)
-INSTAGRAM_ACCESS_TOKEN=your_long_lived_token
-INSTAGRAM_ACCOUNT_ID=your_ig_account_id
+# اینستاگرام (اختیاری — برای لایو پست از طریق Make.com Webhook)
+MAKE_INSTAGRAM_WEBHOOK_URL=https://hook.us2.make.com/your_webhook_url
+# یا
+INSTAGRAM_WEBHOOK_URL=https://hook.us2.make.com/your_webhook_url
 ```
 
-> **نکته مهم:** اگر مقادیر اینستاگرام خالی باقی بمانند، سایت-powered-up اجرا می‌شود ولی پست‌های اینستاگرام در `NewsLinkPills` به حالت disabled (کمرنگ) نمایش داده می‌شوند.
+> **نکته مهم:** اینستاگرام از طریق **Make.com Webhook** منتشر می‌شود. نیازی به `INSTAGRAM_ACCESS_TOKEN` یا `INSTAGRAM_ACCOUNT_ID` نیست. اگر وب‌هوک Make تنظیم نشده باشد، س이트 اجرا می‌شود ولی پست‌های اینستاگرام در `NewsLinkPills` به حالت disabled (کمرنگ) نمایش داده می‌شوند.
 
 ---
 

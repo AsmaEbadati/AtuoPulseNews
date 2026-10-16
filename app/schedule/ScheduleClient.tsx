@@ -662,6 +662,7 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                     type="button"
                     onClick={() => handleSelectFrequency(opt.times)}
                     style={{
+                      fontFamily: "var(--font-main)",
                       padding: "var(--space-3) var(--space-4)",
                       borderRadius: "var(--radius-md)",
                       border: isSelected ? "2px solid var(--color-primary)" : "1px solid var(--color-border-2)",
@@ -675,13 +676,14 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                     {opt.recommended && (
                       <span
                         style={{
+                          fontFamily: "var(--font-main)",
                           position: "absolute",
                           left: "8px",
                           top: "-8px",
                           background: "var(--color-primary)",
                           color: "#fff",
                           fontSize: "10px",
-                          padding: "1px 6px",
+                          padding: "2px 8px",
                           borderRadius: "999px",
                           fontWeight: 700,
                         }}
@@ -691,11 +693,11 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                     )}
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
                       <span style={{ fontSize: "16px" }}>{opt.icon}</span>
-                      <span style={{ fontWeight: 700, fontSize: "14px", color: isSelected ? "var(--color-primary)" : "var(--color-text-1)" }}>
+                      <span style={{ fontFamily: "var(--font-main)", fontWeight: 700, fontSize: "14px", color: isSelected ? "var(--color-primary)" : "var(--color-text-1)" }}>
                         {opt.label}
                       </span>
                     </div>
-                    <div style={{ fontSize: "11px", color: "var(--color-text-2)" }}>{opt.desc}</div>
+                    <div style={{ fontFamily: "var(--font-main)", fontSize: "11px", color: "var(--color-text-2)" }}>{opt.desc}</div>
                   </button>
                 );
               })}
@@ -715,12 +717,12 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
               <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--color-text-1)", display: "flex", alignItems: "center", gap: "6px" }}>
                 <span>🕒 ساعات پایش باما و انتشار (به وقت محلی تهران):</span>
               </div>
-              <span className="badge badge--neutral" style={{ fontSize: "11px" }}>
-                کران جاب pg_cron در دیتابیس: <code>{scrapeConfig.cron_expression}</code>
+              <span className="badge badge--neutral" style={{ fontSize: "11px", fontFamily: "var(--font-main)" }}>
+                کران جاب pg_cron در دیتابیس: <code style={{ fontFamily: "var(--font-main)", direction: "ltr", display: "inline-block" }}>{scrapeConfig.cron_expression}</code>
               </span>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)", alignItems: "center" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-3)", alignItems: "center" }}>
               {scrapeConfig.schedule_times.map((time, idx) => (
                 <div
                   key={idx}
@@ -734,29 +736,47 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
                     border: "1px solid var(--color-border-1)",
                     fontSize: "13px",
                     fontWeight: 600,
+                    fontFamily: "var(--font-main)",
                   }}
                 >
-                  <span style={{ color: "var(--color-primary)" }}>
+                  <span style={{ color: "var(--color-primary)", fontFamily: "var(--font-main)" }}>
                     {idx === 0 ? "🌅" : idx === 1 ? "☀️" : idx === 2 ? "🌆" : idx === 3 ? "🌙" : "⏰"} نوبت {idx + 1}:
                   </span>
-                  <input
-                    type="time"
-                    value={time}
-                    onChange={(e) => {
-                      const newTimes = [...scrapeConfig.schedule_times];
-                      newTimes[idx] = e.target.value;
-                      updateScrapeConfig({ schedule_times: newTimes });
-                    }}
+                  <div
                     style={{
-                      border: "none",
-                      background: "transparent",
-                      color: "var(--color-text-1)",
-                      fontWeight: 700,
-                      fontSize: "13px",
-                      cursor: "pointer",
-                      padding: "0 2px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      background: "var(--color-surface-1)",
+                      border: "1px solid var(--color-border-2)",
+                      borderRadius: "var(--radius-sm)",
+                      padding: "2px 8px",
                     }}
-                  />
+                  >
+                    <input
+                      type="text"
+                      value={time}
+                      maxLength={5}
+                      placeholder="09:30"
+                      onChange={(e) => {
+                        const newTimes = [...scrapeConfig.schedule_times];
+                        newTimes[idx] = e.target.value;
+                        updateScrapeConfig({ schedule_times: newTimes });
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "var(--color-text-1)",
+                        fontFamily: "var(--font-main)",
+                        fontWeight: 700,
+                        fontSize: "14px",
+                        width: "52px",
+                        textAlign: "center",
+                        direction: "ltr",
+                        padding: 0,
+                        outline: "none",
+                      }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
