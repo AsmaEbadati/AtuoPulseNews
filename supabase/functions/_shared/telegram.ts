@@ -5,15 +5,15 @@ import { getServiceClient } from "./supabase.ts";
 
 const TELEGRAM_API = "https://api.telegram.org";
 
-export const isTelegramConfigured = Boolean(
-  Deno.env.get("TELEGRAM_BOT_TOKEN") && Deno.env.get("TELEGRAM_CHANNEL_ID")
-);
+const DEFAULT_BOT_TOKEN = "8783134519:AAHz8iS8AWf3TCRVFhs7aJ2x7miuZdRWM3c";
+const DEFAULT_CHANNEL_ID = "@autopulsenewsai";
+
+export const isTelegramConfigured = true;
 
 function requireConfig() {
-  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
-  const chatId = Deno.env.get("TELEGRAM_CHANNEL_ID");
-  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not configured.");
-  if (!chatId) throw new Error("TELEGRAM_CHANNEL_ID is not configured.");
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN") || DEFAULT_BOT_TOKEN;
+  let chatId = Deno.env.get("TELEGRAM_CHANNEL_ID") || DEFAULT_CHANNEL_ID;
+  if (chatId === "104067526") chatId = DEFAULT_CHANNEL_ID;
   return { token, chatId };
 }
 
@@ -89,7 +89,7 @@ export async function publishToTelegram(news: TelegramNews): Promise<PublishResu
 
   try {
     let messageId: number | null = null;
-    const chatId = Deno.env.get("TELEGRAM_CHANNEL_ID")!;
+    const { chatId } = requireConfig();
 
     if (photo) {
       const msg = await callApi<{ message_id: number }>("sendPhoto", {

@@ -15,7 +15,7 @@ import { getSupabaseClient, isSupabaseConfigured } from "../supabase";
 const TELEGRAM_API = "https://api.telegram.org";
 
 const DEFAULT_BOT_TOKEN = "8783134519:AAHz8iS8AWf3TCRVFhs7aJ2x7miuZdRWM3c";
-const DEFAULT_CHANNEL_ID = "104067526"; // یا آیدی کانال @AutoPulseNews
+const DEFAULT_CHANNEL_ID = "@autopulsenewsai";
 
 /** تلگرام/کانال کانفیگ شده؟ */
 export const isTelegramConfigured = true;
@@ -139,25 +139,26 @@ export async function publishToTelegram(news: TelegramNews): Promise<PublishResu
 
   try {
     let messageId: number | null = null;
+    const { chatId } = requireConfig();
 
     if (photo) {
       // ارسال عکس همراه کپشن
       const msg = await callApi<{ message_id: number; chat: { id: number } }>("sendPhoto", {
-        chat_id: process.env.TELEGRAM_CHANNEL_ID,
+        chat_id: chatId,
         photo,
         caption: caption.slice(0, 1024),
       });
       messageId = msg.message_id;
     } else {
       const msg = await callApi<{ message_id: number }>("sendMessage", {
-        chat_id: process.env.TELEGRAM_CHANNEL_ID,
+        chat_id: chatId,
         text: caption,
         disable_web_page_preview: false,
       });
       messageId = msg.message_id;
     }
 
-    const postUrl = messageId ? buildMessageLink(process.env.TELEGRAM_CHANNEL_ID!, messageId) : null;
+    const postUrl = messageId ? buildMessageLink(chatId, messageId) : null;
     await completePublication(news.id, "success", postUrl, null);
     console.log(`[telegram] ✅ published "${news.title}" (msg ${messageId})`);
     return { news_id: news.id, destination: "telegram", status: "success", post_url: postUrl ?? undefined };

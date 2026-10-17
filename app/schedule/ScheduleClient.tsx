@@ -336,64 +336,88 @@ export default function ScheduleClient({ initialSettings, items }: Props) {
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "var(--space-3)" }}>
-            {/* وب‌سایت */}
-            <div style={{ padding: "var(--space-3)", background: "var(--color-surface-1)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-2)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                <span style={{ fontWeight: 700, fontSize: "13px" }}>🌐 وب‌سایت</span>
-                <span className={`badge badge--${pipelineTestResult.results?.website?.status === "success" ? "success" : "neutral"}`}>
-                  {pipelineTestResult.results?.website?.status === "success" ? "منتشر شد" : "رد شد / نیاز به بررسی"}
+          {pipelineTestResult.error && (
+            <div
+              className="alert alert--error"
+              style={{
+                marginBottom: "var(--space-3)",
+                padding: "10px 14px",
+                fontSize: "13px",
+                background: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                borderRadius: "var(--radius-md)",
+                color: "var(--color-text-1)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                <IconBox name="alert" tone="accent" size={16} />
+                <span>
+                  <strong>خطای سرور:</strong> {pipelineTestResult.error}
                 </span>
               </div>
-              <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
-                {pipelineTestResult.results?.website?.post_url ? (
-                  <a href={pipelineTestResult.results.website.post_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
-                    مشاهده خبر در سایت ↗
-                  </a>
-                ) : (
-                  pipelineTestResult.results?.website?.error || "آدرس دامنه سایت (NEXT_PUBLIC_SITE_URL) تنظیم نشده بود."
-                )}
-              </p>
             </div>
+          )}
 
-            {/* تلگرام */}
-            <div style={{ padding: "var(--space-3)", background: "var(--color-surface-1)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-2)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                <span style={{ fontWeight: 700, fontSize: "13px" }}>✈️ کانال تلگرام</span>
-                <span className={`badge badge--${pipelineTestResult.results?.telegram?.status === "success" ? "success" : pipelineTestResult.results?.telegram?.status === "skipped" ? "neutral" : "error"}`}>
-                  {pipelineTestResult.results?.telegram?.status === "success" ? "ارسال شد" : pipelineTestResult.results?.telegram?.status === "skipped" ? "رد شد (عدم تنظیم توکن)" : "خطا"}
-                </span>
-              </div>
-              <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
-                {pipelineTestResult.results?.telegram?.status === "success" ? (
-                  pipelineTestResult.results?.telegram?.post_url ? (
-                    <a href={pipelineTestResult.results.telegram.post_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
-                      مشاهده پست در تلگرام ↗
+          {pipelineTestResult.results && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "var(--space-3)" }}>
+              {/* وب‌سایت */}
+              <div style={{ padding: "var(--space-3)", background: "var(--color-surface-1)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-2)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                  <span style={{ fontWeight: 700, fontSize: "13px" }}>🌐 وب‌سایت</span>
+                  <span className={`badge badge--${pipelineTestResult.results?.website?.status === "success" ? "success" : "neutral"}`}>
+                    {pipelineTestResult.results?.website?.status === "success" ? "منتشر شد" : "رد شد / نیاز به بررسی"}
+                  </span>
+                </div>
+                <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
+                  {pipelineTestResult.results?.website?.post_url ? (
+                    <a href={pipelineTestResult.results.website.post_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
+                      مشاهده خبر در سایت ↗
                     </a>
-                  ) : "ارسال با موفقیت انجام شد."
-                ) : (
-                  pipelineTestResult.results?.telegram?.error || "توکن بات یا آیدی کانال تلگرام در متغیرهای سرور ست نشده است."
-                )}
-              </p>
-            </div>
-
-            {/* اینستاگرام */}
-            <div style={{ padding: "var(--space-3)", background: "var(--color-surface-1)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-2)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                <span style={{ fontWeight: 700, fontSize: "13px" }}>📸 اینستاگرام (Make)</span>
-                <span className={`badge badge--${pipelineTestResult.results?.instagram?.status === "success" ? "success" : pipelineTestResult.results?.instagram?.status === "skipped" ? "neutral" : "error"}`}>
-                  {pipelineTestResult.results?.instagram?.status === "success" ? "ارسال شد" : pipelineTestResult.results?.instagram?.status === "skipped" ? "رد شد (عدم تنظیم وب‌هوک)" : "خطا"}
-                </span>
+                  ) : (
+                    pipelineTestResult.results?.website?.error || "خطا یا رد شدن انتشار روی سایت."
+                  )}
+                </p>
               </div>
-              <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
-                {pipelineTestResult.results?.instagram?.status === "success" ? (
-                  "رویداد همراه با عکس ۱۰۸۰×۱۰۸۰ به وب‌هوک Make فرستاده شد."
-                ) : (
-                  pipelineTestResult.results?.instagram?.error || "آدرس وب‌هوک Make در کادر مربوطه در پایین وارد نشده است."
-                )}
-              </p>
+
+              {/* تلگرام */}
+              <div style={{ padding: "var(--space-3)", background: "var(--color-surface-1)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-2)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                  <span style={{ fontWeight: 700, fontSize: "13px" }}>✈️ کانال تلگرام</span>
+                  <span className={`badge badge--${pipelineTestResult.results?.telegram?.status === "success" ? "success" : pipelineTestResult.results?.telegram?.status === "skipped" ? "neutral" : "error"}`}>
+                    {pipelineTestResult.results?.telegram?.status === "success" ? "ارسال شد" : pipelineTestResult.results?.telegram?.status === "skipped" ? "رد شد (عدم تنظیم توکن)" : "خطا"}
+                  </span>
+                </div>
+                <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
+                  {pipelineTestResult.results?.telegram?.status === "success" ? (
+                    pipelineTestResult.results?.telegram?.post_url ? (
+                      <a href={pipelineTestResult.results.telegram.post_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>
+                        مشاهده پست در تلگرام ↗
+                      </a>
+                    ) : "ارسال با موفقیت انجام شد."
+                  ) : (
+                    pipelineTestResult.results?.telegram?.error || "خطا در ارسال به تلگرام."
+                  )}
+                </p>
+              </div>
+
+              {/* اینستاگرام */}
+              <div style={{ padding: "var(--space-3)", background: "var(--color-surface-1)", borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-2)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                  <span style={{ fontWeight: 700, fontSize: "13px" }}>📸 اینستاگرام (Make)</span>
+                  <span className={`badge badge--${pipelineTestResult.results?.instagram?.status === "success" ? "success" : pipelineTestResult.results?.instagram?.status === "skipped" ? "neutral" : "error"}`}>
+                    {pipelineTestResult.results?.instagram?.status === "success" ? "ارسال شد" : pipelineTestResult.results?.instagram?.status === "skipped" ? "رد شد (عدم تنظیم وب‌هوک)" : "خطا"}
+                  </span>
+                </div>
+                <p style={{ fontSize: "12px", color: "var(--color-text-2)", margin: 0 }}>
+                  {pipelineTestResult.results?.instagram?.status === "success" ? (
+                    "رویداد همراه با عکس ۱۰۸۰×۱۰۸۰ به وب‌هوک Make فرستاده شد."
+                  ) : (
+                    pipelineTestResult.results?.instagram?.error || "خطا در ارسال به اینستاگرام."
+                  )}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
