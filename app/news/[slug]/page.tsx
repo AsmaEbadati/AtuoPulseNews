@@ -9,6 +9,9 @@ type PageProps = {
   params: Promise<{ slug: string }>;
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 async function getArticle(slug: string) {
   return getArticleWithLinks(slug);
 }

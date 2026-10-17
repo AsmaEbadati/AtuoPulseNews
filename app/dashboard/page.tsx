@@ -7,6 +7,9 @@ export const metadata: Metadata = {
   description: "لاگ اجراهای پایپ‌لاین AutoPulse و وضعیت انتشار اخبار",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0; // دریافت لحظه‌ای و زنده آمار و لاگ‌ها
+
 interface RunRow {
   started_at: string;
   finished_at: string | null;

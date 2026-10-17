@@ -9,6 +9,9 @@ export const metadata: Metadata = {
     "آخرین اخبار بازار خودرو ایران، پردازش‌شده با هوش مصنوعی و انتشار خودکار",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0; // دریافت لحظه‌ای اخبار بدون کش استاتیک
+
 function formatDate(dateString: string) {
   const date = new Date(dateString);
   const now = new Date();
