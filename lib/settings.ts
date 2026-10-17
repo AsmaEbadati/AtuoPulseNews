@@ -185,6 +185,15 @@ export async function saveAppSettings(
       if (error) {
         console.warn("[settings] DB upsert failed (table might need migration):", error.message);
       }
+
+      // همگام‌سازی مستقیم pg_cron در دیتابیس Supabase در صورت وجود تابع set_pipeline_cron
+      if (merged.scrape_schedule?.cron_expression) {
+        try {
+          await db.rpc("set_pipeline_cron", { p_cron_expr: merged.scrape_schedule.cron_expression });
+        } catch (rpcErr) {
+          console.log("[settings] set_pipeline_cron RPC notice:", rpcErr);
+        }
+      }
     } catch (err) {
       console.warn("[settings] Error saving settings to Supabase:", err);
     }
