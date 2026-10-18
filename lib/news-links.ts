@@ -55,7 +55,19 @@ async function fetchLinksForIds(
   for (const row of data ?? []) {
     const slug = (row as any).slug as string;
     const dest = (row as any).destination as "telegram" | "instagram";
-    const url = (row as any).post_url as string | null;
+    let url = (row as any).post_url as string | null;
+    if (dest === "telegram") {
+      if (url && url.includes("104067526")) {
+        const msgMatch = url.match(/\/(\d+)$/);
+        url = msgMatch ? `https://t.me/autopulsenewsai/${msgMatch[1]}` : "https://t.me/autopulsenewsai";
+      } else if (!url) {
+        url = "https://t.me/autopulsenewsai";
+      }
+    } else if (dest === "instagram") {
+      if (!url) {
+        url = "https://instagram.com/autopulsenews";
+      }
+    }
     if (!slug || !url) continue;
     if (!map[slug]) map[slug] = { telegram_url: null, instagram_url: null };
     map[slug][dest === "telegram" ? "telegram_url" : "instagram_url"] = url;

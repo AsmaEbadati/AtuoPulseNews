@@ -107,7 +107,8 @@ export async function publishToTelegram(news: TelegramNews): Promise<PublishResu
       messageId = msg.message_id;
     }
 
-    const postUrl = messageId ? buildMessageLink(chatId, messageId) : null;
+    const channelHandle = chatId.startsWith("@") ? chatId.slice(1) : chatId;
+    const postUrl = (messageId ? buildMessageLink(chatId, messageId) : null) || `https://t.me/${channelHandle}`;
     await db.rpc("complete_publication", {
       p_news_id: news.id,
       p_destination: "telegram",

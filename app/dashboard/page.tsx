@@ -85,6 +85,26 @@ function getDuration(start: string, end: string | null) {
   return `${(ms / 1000).toFixed(0)}ث`;
 }
 
+function resolvePostUrl(s: StatusRow): string | null {
+  if (s.post_url) {
+    if (s.destination === "telegram" && (s.post_url.includes("104067526") || !s.post_url.startsWith("http"))) {
+      const msgMatch = s.post_url.match(/\/(\d+)$/);
+      return msgMatch ? `https://t.me/autopulsenewsai/${msgMatch[1]}` : "https://t.me/autopulsenewsai";
+    }
+    return s.post_url;
+  }
+  if (s.status === "success" && s.destination === "telegram") {
+    return "https://t.me/autopulsenewsai";
+  }
+  if (s.status === "success" && s.destination === "instagram") {
+    return "https://instagram.com/autopulsenews";
+  }
+  if (s.status === "success" && s.destination === "site" && s.slug) {
+    return `/news/${s.slug}`;
+  }
+  return null;
+}
+
 export default async function DashboardPage() {
   const [runs, statuses] = await Promise.all([getRuns(), getStatuses()]);
   const stats = computeStats(statuses);
@@ -218,12 +238,15 @@ export default async function DashboardPage() {
             </div>
             <div className="pub-report-card__count pub-report-card__count--primary">{tgSuccesses.length}</div>
             <div className="pub-report-card__meta">آخرین انتشار: {lastTg ? formatDate(lastTg.updated_at) : "—"}</div>
-            {lastTg?.post_url && (
-              <a href={lastTg.post_url} target="_blank" rel="noopener noreferrer" className="pub-report-card__link">
-                <Icon name="external" size={11} />
-                مشاهده آخرین پست
-              </a>
-            )}
+            {(() => {
+              const tgUrl = lastTg ? resolvePostUrl(lastTg) : null;
+              return tgUrl ? (
+                <a href={tgUrl} target="_blank" rel="noopener noreferrer" className="pub-report-card__link">
+                  <Icon name="external" size={11} />
+                  مشاهده آخرین پست
+                </a>
+              ) : null;
+            })()}
           </div>
           {/* Instagram */}
           <div className="pub-report-card">
@@ -361,11 +384,19 @@ export default async function DashboardPage() {
                                 ? "grid"
                                 : s.destination === "telegram"
                                 ? "telegram"
-                                : "instagram"
+                                : s.destination === "instagram"
+                                ? "instagram"
+                                : "clock"
                             }
                             size={11}
                           />
-                          {s.destination === "site" ? "سایت" : s.destination === "telegram" ? "تلگرام" : "اینستاگرام"}
+                          {s.destination === "site"
+                            ? "سایت"
+                            : s.destination === "telegram"
+                            ? "تلگرام"
+                            : s.destination === "instagram"
+                            ? "اینستاگرام"
+                            : "در صف پردازش"}
                         </span>
                       </td>
                       <td>
@@ -378,19 +409,22 @@ export default async function DashboardPage() {
                               : "badge--pending"
                           }`}
                         >
-                          {s.status === "success" ? "موفق" : s.status === "error" ? "خطا" : "منتظر"}
+                          {s.status === "success" ? "موفق" : s.status === "error" ? "خطا" : s.destination ? "منتظر" : "در صف"}
                         </span>
                       </td>
                       <td>{s.attempts}</td>
                       <td>
-                        {s.post_url ? (
-                          <a className="cell-link" href={s.post_url} target="_blank" rel="noopener noreferrer">
-                            <Icon name="external" size={12} />
-                            مشاهده
-                          </a>
-                        ) : (
-                          "—"
-                        )}
+                        {(() => {
+                          const url = resolvePostUrl(s);
+                          return url ? (
+                            <a className="cell-link" href={url} target="_blank" rel="noopener noreferrer">
+                              <Icon name="external" size={12} />
+                              مشاهده
+                            </a>
+                          ) : (
+                            "—"
+                          );
+                        })()}
                       </td>
                       <td className="cell-note is-err">{s.error_message ?? "—"}</td>
                     </tr>

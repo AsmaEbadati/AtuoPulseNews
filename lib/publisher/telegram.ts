@@ -158,7 +158,8 @@ export async function publishToTelegram(news: TelegramNews): Promise<PublishResu
       messageId = msg.message_id;
     }
 
-    const postUrl = messageId ? buildMessageLink(chatId, messageId) : null;
+    const channelHandle = chatId.startsWith("@") ? chatId.slice(1) : chatId;
+    const postUrl = (messageId ? buildMessageLink(chatId, messageId) : null) || `https://t.me/${channelHandle}`;
     await completePublication(news.id, "success", postUrl, null);
     console.log(`[telegram] ✅ published "${news.title}" (msg ${messageId})`);
     return { news_id: news.id, destination: "telegram", status: "success", post_url: postUrl ?? undefined };
