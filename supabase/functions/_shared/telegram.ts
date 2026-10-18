@@ -11,8 +11,8 @@ const DEFAULT_CHANNEL_ID = "@autopulsenewsai";
 export const isTelegramConfigured = true;
 
 function requireConfig() {
-  const token = Deno.env.get("TELEGRAM_BOT_TOKEN") || DEFAULT_BOT_TOKEN;
-  let chatId = Deno.env.get("TELEGRAM_CHANNEL_ID") || DEFAULT_CHANNEL_ID;
+  const token = (Deno.env.get("TELEGRAM_BOT_TOKEN") || DEFAULT_BOT_TOKEN).trim();
+  let chatId = (Deno.env.get("TELEGRAM_CHANNEL_ID") || DEFAULT_CHANNEL_ID).trim();
   if (chatId === "104067526") chatId = DEFAULT_CHANNEL_ID;
   return { token, chatId };
 }

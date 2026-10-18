@@ -21,8 +21,8 @@ const DEFAULT_CHANNEL_ID = "@autopulsenewsai";
 export const isTelegramConfigured = true;
 
 function requireConfig() {
-  const token = process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHANNEL_ID || DEFAULT_CHANNEL_ID;
+  const token = (process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN).trim();
+  const chatId = (process.env.TELEGRAM_CHANNEL_ID || DEFAULT_CHANNEL_ID).trim();
   return { token, chatId };
 }
 
